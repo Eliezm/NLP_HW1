@@ -63,7 +63,7 @@ def main():
     # inspect_weights("weights.pkl")
 
     threshold        = 1
-    lam              = 3
+    lam              = 2
     train_path       = "data/train1.wtag"
     test_path        = "data/comp1.words"
     weights_path     = "weights.pkl"

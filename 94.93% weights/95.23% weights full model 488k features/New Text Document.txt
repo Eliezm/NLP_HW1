@@ -1,0 +1,10 @@
+
+    threshold        = 1
+    lam              = 3
+    train_path       = "data/train1.wtag"
+    test_path        = "data/comp1.words"
+    weights_path     = "weights.pkl"
+    predictions_path = "predictions.wtag"
+    pruned_weights_path = "weights_pruned.pkl"
+
+Viterbi K = 10

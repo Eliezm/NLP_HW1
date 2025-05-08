@@ -14,7 +14,7 @@ def memm_viterbi(sentence: list,
     You can implement Beam Search to improve runtime
     Implement q efficiently (refer to conditional probability definition in MEMM slides)
     """
-    K = 10
+    K = 13
 
     all_tags = [t for t in feature2id.feature_statistics.tags if t != "~"]
 
