@@ -1,0 +1,80 @@
+Loaded 10k-model, fine-tune on top 5k features by |w|
+Again threshold = 1, lam = 3
+
+[main] Loading pretrained model from weights.pkl
+[main] Pruning to top 5000 features by |w|…
+[main] 5000 features remain after 5k-prune
+[main] Fine-tuning on 5k feature set…
+RUNNING THE L-BFGS-B CODE
+
+           * * *
+
+Machine precision = 2.220D-16
+ N =         5000     M =           10
+
+At X0         0 variables are exactly at the bounds
+
+At iterate    0    f=  4.31758D+05    |proj g|=  2.35330D+04
+ This problem is unconstrained.
+
+At iterate   10    f=  1.26083D+05    |proj g|=  4.73035D+03
+
+At iterate   20    f=  9.06223D+04    |proj g|=  1.03370D+03
+
+At iterate   30    f=  8.00542D+04    |proj g|=  1.84099D+02
+
+At iterate   40    f=  7.49112D+04    |proj g|=  2.16391D+02
+
+At iterate   50    f=  7.26694D+04    |proj g|=  1.30886D+03
+
+At iterate   60    f=  7.15618D+04    |proj g|=  3.84715D+02
+
+At iterate   70    f=  7.11236D+04    |proj g|=  4.33539D+01
+
+At iterate   80    f=  7.09578D+04    |proj g|=  1.28868D+02
+
+At iterate   90    f=  7.09011D+04    |proj g|=  3.64536D+01
+
+At iterate  100    f=  7.08764D+04    |proj g|=  7.75340D+00
+
+At iterate  110    f=  7.08691D+04    |proj g|=  2.40404D+01
+
+At iterate  120    f=  7.08662D+04    |proj g|=  2.15783D+00
+
+At iterate  130    f=  7.08651D+04    |proj g|=  3.27457D+00
+
+At iterate  140    f=  7.08647D+04    |proj g|=  4.07197D+00
+
+At iterate  150    f=  7.08645D+04    |proj g|=  2.16779D+00
+
+At iterate  160    f=  7.08645D+04    |proj g|=  4.14442D+00
+
+At iterate  170    f=  7.08645D+04    |proj g|=  3.46885D-01
+
+At iterate  180    f=  7.08645D+04    |proj g|=  3.42810D-01
+
+At iterate  190    f=  7.08645D+04    |proj g|=  1.57772D-01
+
+           * * *
+
+Tit   = total number of iterations
+Tnf   = total number of function evaluations
+Tnint = total number of segments explored during Cauchy searches
+Skip  = number of BFGS updates skipped
+Nact  = number of active bounds at final generalized Cauchy point
+Projg = norm of the final projected gradient
+F     = final function value
+
+           * * *
+
+   N    Tit     Tnf  Tnint  Skip  Nact     Projg        F
+ 5000    192    203      1     0     0   3.420D-01   7.086D+04
+  F =   70864.463784123305     
+
+CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH             
+[main] Tagging test set…
+100%|██████████| 1000/1000 [00:52<00:00, 19.18it/s]
+[main] Predictions written to predictions.wtag
+[main] Evaluating on held-out test1.wtag…
+Word-level accuracy: 93.57%
+

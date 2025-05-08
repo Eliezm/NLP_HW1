@@ -1,0 +1,175 @@
+features used
+        # Init all features dictionaries
+        feature_dict_list = ["f100", "f101", "f102", "f103", "f104",
+                             "f105", "f106", "f107","f108","f109","f110", "f111", "f112",
+                             "f113",
+                                "f114",  # G2: capital‐start
+                                "f115",  # G3: init‐cap & first‐word
+                                "f116",  # G4: init‐cap & not‐first
+                                "f117",  # G5: ALL‐CAPS
+                               # ——— new features ———
+                                     "f132",  # word‐shape
+                                     "f_char3",  # char 3‐grams
+                                     "f_char4",  # char 4‐grams
+                                     "f_wordbigram_prev",
+                                     "f_wordbigram_next",
+                                     "f_tagshape",  # cross of tag‐bigram × shape
+                             # "f118",  # G6: numeric-with-separators
+                             # "f119", "f120", "f121",  # G7_1, G7_2, G7_3 (unknown)
+                             # "f122", "f123", "f124", "f125",  # G8_1 … G8_4
+                             # "f126", "f127", "f128", "f129",  # G8_5 … G8_8
+                             # "f130", "f131"  # G8_9, G8_10
+                             ]  # the feature classes used in the code
+
+    threshold = 1
+    lam = 3
+
+training:
+C:\Users\eliez\AppData\Local\Programs\Python\Python311\python.exe "C:\Users\eliez\Desktop\חומר לימודי\אביב 2025\שיטות בעיבוד שפה טבעית - 097215\Homework\HW1\HW1\NLP_HW1\main.py" 
+you have 319142 features!
+319142
+f100 15415
+f101 13265
+f102 22393
+f103 7810
+f104 1023
+f105 44
+f106 32095
+f107 30777
+f108 6
+f109 2
+f110 35
+f111 33
+f112 22
+f113 2
+f114 33
+f115 32
+f116 29
+f117 22
+f132 247
+f_char3 22901
+f_char4 36543
+f_wordbigram_prev 67155
+f_wordbigram_next 67372
+f_gaz_person 0
+f_brown 0
+f_tagshape 1886
+ This problem is unconstrained.
+RUNNING THE L-BFGS-B CODE
+
+           * * *
+
+Machine precision = 2.220D-16
+ N =       319142     M =           10
+
+At X0         0 variables are exactly at the bounds
+
+At iterate    0    f=  2.02588D+06    |proj g|=  5.89214D+04
+
+At iterate   10    f=  8.97392D+05    |proj g|=  5.26860D+03
+
+At iterate   20    f=  6.64009D+05    |proj g|=  2.79399D+03
+
+At iterate   30    f=  5.45641D+05    |proj g|=  3.75515D+03
+
+At iterate   40    f=  4.31440D+05    |proj g|=  2.42536D+03
+
+At iterate   50    f=  3.11500D+05    |proj g|=  1.78906D+03
+
+At iterate   60    f=  2.08380D+05    |proj g|=  6.83489D+02
+
+At iterate   70    f=  1.45271D+05    |proj g|=  4.95717D+02
+
+At iterate   80    f=  1.06793D+05    |proj g|=  9.81381D+02
+
+At iterate   90    f=  7.87615D+04    |proj g|=  3.16209D+02
+
+At iterate  100    f=  6.49989D+04    |proj g|=  2.33370D+02
+
+At iterate  110    f=  5.61436D+04    |proj g|=  1.69604D+03
+
+At iterate  120    f=  5.09763D+04    |proj g|=  2.42062D+02
+
+At iterate  130    f=  4.80746D+04    |proj g|=  4.35813D+02
+
+At iterate  140    f=  4.63447D+04    |proj g|=  1.40171D+02
+
+At iterate  150    f=  4.53215D+04    |proj g|=  1.42558D+02
+
+At iterate  160    f=  4.46846D+04    |proj g|=  1.83457D+02
+
+At iterate  170    f=  4.42947D+04    |proj g|=  1.38545D+02
+
+At iterate  180    f=  4.40258D+04    |proj g|=  6.10494D+01
+
+At iterate  190    f=  4.38258D+04    |proj g|=  5.67442D+01
+
+At iterate  200    f=  4.37034D+04    |proj g|=  4.24641D+01
+
+At iterate  210    f=  4.36251D+04    |proj g|=  2.20416D+01
+
+At iterate  220    f=  4.35752D+04    |proj g|=  3.01536D+01
+
+At iterate  230    f=  4.35508D+04    |proj g|=  2.03407D+01
+
+At iterate  240    f=  4.35357D+04    |proj g|=  4.26948D+01
+
+At iterate  250    f=  4.35261D+04    |proj g|=  1.57930D+01
+
+At iterate  260    f=  4.35201D+04    |proj g|=  9.26012D+00
+
+At iterate  270    f=  4.35171D+04    |proj g|=  3.46820D+00
+
+At iterate  280    f=  4.35154D+04    |proj g|=  1.33014D+01
+
+At iterate  290    f=  4.35144D+04    |proj g|=  3.11061D+00
+
+At iterate  300    f=  4.35137D+04    |proj g|=  6.05027D+00
+
+At iterate  310    f=  4.35135D+04    |proj g|=  2.88444D+00
+
+At iterate  320    f=  4.35133D+04    |proj g|=  1.30450D+00
+
+At iterate  330    f=  4.35132D+04    |proj g|=  3.32753D+00
+
+At iterate  340    f=  4.35131D+04    |proj g|=  5.77157D-01
+
+At iterate  350    f=  4.35131D+04    |proj g|=  3.58148D+00
+
+At iterate  360    f=  4.35130D+04    |proj g|=  7.84870D-01
+
+At iterate  370    f=  4.35130D+04    |proj g|=  3.18724D-01
+
+At iterate  380    f=  4.35130D+04    |proj g|=  5.89873D-01
+
+At iterate  390    f=  4.35130D+04    |proj g|=  8.78131D-01
+
+At iterate  400    f=  4.35130D+04    |proj g|=  1.72554D-01
+
+At iterate  410    f=  4.35130D+04    |proj g|=  1.83354D-01
+
+           * * *
+
+Tit   = total number of iterations
+Tnf   = total number of function evaluations
+Tnint = total number of segments explored during Cauchy searches
+Skip  = number of BFGS updates skipped
+Nact  = number of active bounds at final generalized Cauchy point
+Projg = norm of the final projected gradient
+F     = final function value
+
+           * * *
+
+   N    Tit     Tnf  Tnint  Skip  Nact     Projg        F
+*****    413    440      1     0     0   2.912D-01   4.351D+04
+  F =   43513.008570966071     
+
+CONVERGENCE: REL_REDUCTION_OF_F_<=_FACTR*EPSMCH             
+[ 4.57154584  0.69802415  7.35176733 ...  0.00891005 -1.05136142
+  0.10147909]
+100%|██████████| 1000/1000 [01:29<00:00, 11.14it/s]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Word-level accuracy: 94.93%
+
+Process finished with exit code 0
