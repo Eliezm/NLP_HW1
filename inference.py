@@ -39,8 +39,12 @@ def memm_viterbi(sentence: list,
                     sentence[i-2], pp_tag,
                     next_word
                 )
-                feats = represent_input_with_features(hist_tp,
-                                                      feature2id.feature_to_idx)
+                feats = represent_input_with_features(
+                    hist_tp,
+                    feature2id.feature_to_idx,
+                    feature2id.feature_statistics.common_words
+                )
+
                 score_tp = sum(pre_trained_weights[idx] for idx in feats)
                 scores.append(score_tp)
 

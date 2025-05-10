@@ -1,11 +1,14 @@
+import string
+
 from scipy import sparse
 from collections import OrderedDict, defaultdict
 import numpy as np
-from typing import List, Dict, Tuple
-
+from typing import List, Dict, Tuple, Set
 
 WORD = 0
 TAG = 1
+
+
 
 def word_shape(w: str) -> str:
     # X=upper, x=lower, 0=digit, else itself; collapse runs
@@ -50,12 +53,17 @@ class FeatureStatistics:
                              # # common‐verb suffix
                              "f300",
                              # # punctuation / hyphen / dot
-                             # "f301", "f302", "f303",
+                             "f301", "f302", "f303",
                              # # prev/next word affixes
                              "f304", "f305", "f306", "f307", "f308",
                              # sentence‐position flags
                              "f309", "f310", "f311",
                              "f143", # word length indicator
+                             "f_wordbigram_prev2",  # prev-2 word + tag
+                             "f_wordbigram_prev3",  # prev-3 word + tag
+                             "f_wordbigram_next2",  # next-2 word + tag
+                             "f_wordbigram_next3",  # next-3 word + tag
+                             "f_sent_len",  # sentence-length bucket + tag
 
                              ]  # the feature classes used in the code
         self.feature_rep_dict = {fd: OrderedDict() for fd in feature_dict_list}
@@ -73,7 +81,7 @@ class FeatureStatistics:
 
 
         self.global_word_counts = defaultdict(int)
-        self.common_words = set()
+        self.common_words: Set[str] = set()
 
     def increase_instances_count(self, feat_class: str, key):
         self.feature_rep_dict[feat_class][key] = self.feature_rep_dict[feat_class].get(key, 0) + 1
@@ -98,8 +106,8 @@ class FeatureStatistics:
             for line in file:
                 line = line.rstrip("\n")
                 words_tags = [wt.split("_") for wt in line.split()]
-                PAD_LEFT = [("*", "*"), ("*", "*")]
-                PAD_RIGHT = [("~", "~")]
+                PAD_LEFT = [("*", "*"), ("*", "*"), ("*", "*")]
+                PAD_RIGHT = [("~", "~"), ("~", "~"), ("~", "~")]
                 padded = PAD_LEFT + words_tags + PAD_RIGHT
 
 
@@ -266,6 +274,12 @@ class FeatureStatistics:
                                                                                                            0) + 1
                             break
 
+                    # f301: contains any punctuation?
+                    contains_punct = any(ch in string.punctuation for ch in w)
+                    self.increase_instances_count("f301", (contains_punct, t))
+                    self.increase_instances_count("f302", ('-' in w, t))
+                    self.increase_instances_count("f303", ('.' in w, t))
+
                     # ── f309–f311: sentence‐position flags ───────────────────────────────────
                     is_second = (pp_word == "*") and (p_word != "*")
                     self.feature_rep_dict["f309"][(is_second, t)] = self.feature_rep_dict["f309"].get((is_second, t), 0) + 1
@@ -286,17 +300,45 @@ class FeatureStatistics:
                         self.feature_rep_dict["f306"][(n_word[-L:], t)] = self.feature_rep_dict["f306"].get(
                             (n_word[-L:], t), 0) + 1
                         self.feature_rep_dict["f307"][(n_word[:L], t)] = self.feature_rep_dict["f307"].get((n_word[:L], t),
-                                                                                                           0) + 1
+                                                                                0) + 1
 
+                    # Compute sentence length bucket once per sentence
+                    # (just before your `for i,(w,t) in enumerate(words_tags):` loop)
+                    n_tokens = len(words_tags)
+                    if n_tokens < 10:
+                        sent_bucket = "short"
+                    elif n_tokens < 20:
+                        sent_bucket = "med"
+                    else:
+                        sent_bucket = "long"
 
-                # # ── histories (same as before) ───────────────────────────────────
-                # for prev2, prev1, curr, next1 in zip(padded, padded[1:], padded[2:], padded[3:]):
-                #     w_m2, t_m2 = prev2
-                #     w_m1, t_m1 = prev1
-                #     w_i, t_i = curr
-                #     w_p1, _ = next1
-                #     history = (w_i, t_i, w_m1, t_m1, w_m2, t_m2, w_p1)
-                #     self.histories.append(history)
+                    # … then inside the per‐token loop, after you have w,t:
+                    # ─── extended context ──────────────────────────────────────────────────
+                    # prev-2
+                    if i >= 2:
+                        key = ((words_tags[i - 2][0], w), t)
+                        self.feature_rep_dict["f_wordbigram_prev2"][key] = \
+                            self.feature_rep_dict["f_wordbigram_prev2"].get(key, 0) + 1
+                    # prev-3
+                    if i >= 3:
+                        key = ((words_tags[i - 3][0], w), t)
+                        self.feature_rep_dict["f_wordbigram_prev3"][key] = \
+                            self.feature_rep_dict["f_wordbigram_prev3"].get(key, 0) + 1
+                    # next-2
+                    if i < len(words_tags) - 2:
+                        key = ((w, words_tags[i + 2][0]), t)
+                        self.feature_rep_dict["f_wordbigram_next2"][key] = \
+                            self.feature_rep_dict["f_wordbigram_next2"].get(key, 0) + 1
+                    # next-3
+                    if i < len(words_tags) - 3:
+                        key = ((w, words_tags[i + 3][0]), t)
+                        self.feature_rep_dict["f_wordbigram_next3"][key] = \
+                            self.feature_rep_dict["f_wordbigram_next3"].get(key, 0) + 1
+
+                    # ─── sentence-length bucket ────────────────────────────────────────────
+                    key = (sent_bucket, t)
+                    self.feature_rep_dict["f_sent_len"][key] = \
+                        self.feature_rep_dict["f_sent_len"].get(key, 0) + 1
 
                 for prev2, prev1, curr, next1 in zip(
                         padded,  # [x0, x1, ... xn]
@@ -345,8 +387,6 @@ class Feature2id:
         self.small_matrix = sparse.csr_matrix
         self.big_matrix = sparse.csr_matrix
 
-
-
     def prune_top_k_by_weight(self, weights: np.ndarray, K: int) -> None:
         """
         Prune top k features by their |w| parameter value
@@ -375,7 +415,7 @@ class Feature2id:
         # 4) rebuild small_matrix (for training)
         rows, cols = [], []
         for i, hist in enumerate(self.feature_statistics.histories):
-            for c in represent_input_with_features(hist, self.feature_to_idx):
+            for c in represent_input_with_features(hist, self.feature_to_idx, self.feature_statistics.common_words):
                 rows.append(i)
                 cols.append(c)
         self.small_matrix = sparse.csr_matrix(
@@ -409,13 +449,13 @@ class Feature2id:
         small_rows = []
         small_cols = []
         for small_r, hist in enumerate(self.feature_statistics.histories):
-            for c in represent_input_with_features(hist, self.feature_to_idx):
+            for c in represent_input_with_features(hist, self.feature_to_idx, self.feature_statistics.common_words):
                 small_rows.append(small_r)
                 small_cols.append(c)
             for r, y_tag in enumerate(self.feature_statistics.tags):
                 demi_hist = (hist[0], y_tag, hist[2], hist[3], hist[4], hist[5], hist[6])
                 self.histories_features[demi_hist] = []
-                for c in represent_input_with_features(demi_hist, self.feature_to_idx):
+                for c in represent_input_with_features(demi_hist, self.feature_to_idx, self.feature_statistics.common_words):
                     big_rows.append(big_r)
                     big_cols.append(c)
                     self.histories_features[demi_hist].append(c)
@@ -429,160 +469,10 @@ class Feature2id:
             shape=(len(
                 self.feature_statistics.histories), self.n_total_features), dtype=bool)
 
-# def represent_input_with_features(history: Tuple, dict_of_dicts: Dict[str, Dict[Tuple[str, str], int]])\
-#         -> List[int]:
-#     """
-#         Extract feature vector in per a given history
-#         @param history: tuple{c_word, c_tag, p_word, p_tag, pp_word, pp_tag, n_word}
-#         @param dict_of_dicts: a dictionary of each feature and the index it was given
-#         @return a list with all features that are relevant to the given history
-#     """
-#     c_word = history[0]
-#     c_tag = history[1]
-#     c_word, c_tag, p_word, p_tag, pp_word, pp_tag, n_word = history
-#
-#     features = []
-#
-#     # f100
-#     if (c_word, c_tag) in dict_of_dicts["f100"]:
-#         features.append(dict_of_dicts["f100"][(c_word, c_tag)])
-#
-#
-#     # f114: capital‐start
-#     if ("capital_start", c_tag) in dict_of_dicts["f114"]:
-#         features.append(dict_of_dicts["f114"][("capital_start", c_tag)])
-#
-#     # f115: initcap_first
-#     if ("initcap_first", c_tag) in dict_of_dicts["f115"]:
-#         features.append(dict_of_dicts["f115"][("initcap_first", c_tag)])
-#
-#     # f116: initcap_notfirst
-#     if ("initcap_notfirst", c_tag) in dict_of_dicts["f116"]:
-#         features.append(dict_of_dicts["f116"][("initcap_notfirst", c_tag)])
-#
-#     # f117: all_caps_word
-#     if ("all_caps_word", c_tag) in dict_of_dicts["f117"]:
-#         features.append(dict_of_dicts["f117"][("all_caps_word", c_tag)])
-#
-#     # ——— f132: word‐shape
-#     shape = word_shape(c_word)
-#     idx = dict_of_dicts["f132"].get((shape, c_tag))
-#     if idx is not None:
-#         features.append(idx)
-#
-#     # ——— f_char3 / f_char4
-#     for n, feat_name in ((3, "f_char3"), (4, "f_char4")):
-#         for j in range(len(c_word) - n + 1):
-#             gram = c_word[j:j + n]
-#             idx = dict_of_dicts[feat_name].get((gram, c_tag))
-#             if idx is not None:
-#                 features.append(idx)
-#
-#     # ——— word‐bigrams
-#     if p_word != "*":
-#         idx = dict_of_dicts["f_wordbigram_prev"].get(((p_word, c_word), c_tag))
-#         if idx is not None: features.append(idx)
-#     if n_word != "~":
-#         idx = dict_of_dicts["f_wordbigram_next"].get(((c_word, n_word), c_tag))
-#         if idx is not None: features.append(idx)
-#
-#
-#
-#     # ——— tag×shape
-#     idx = dict_of_dicts["f_tagshape"].get(((p_tag, c_tag), shape))
-#     if idx is not None:
-#         features.append(idx)
-#
-#     ### More Features That Hasn't Been Used For Training 95% ###
-#
-#     # f138: word‐shape
-#     shape = word_shape(c_word)
-#     idx = dict_of_dicts["f138"].get((shape, c_tag))
-#     if idx is not None:
-#         features.append(idx)
-#
-#     # f141: sentence‐position bucket
-#     # (we need sentence length & position: easiest is to include `bucket` in the history tuple,
-#     #  but if you can’t, you can approximate using the two PAD tags:
-#     is_first = (pp_tag == "*" and p_tag == "*")
-#     is_last = (n_word == "~")
-#     if is_first:
-#         bucket = "start"
-#     elif is_last:
-#         bucket = "end"
-#     else:
-#         bucket = "mid"
-#     idx = dict_of_dicts["f141"].get((bucket, c_tag))
-#     if idx is not None:
-#         features.append(idx)
-#
-#     # f142: common‐word flag
-#     # you’ll need access to the same `global_word_counts` threshold; simplest is to pass
-#     # a set `common_words` into your tagger or store it on feature2id.
-#     # If you have `common_words`, then:
-#     if c_word in common_words:
-#         idx = dict_of_dicts["f142"].get(("common_word", c_tag))
-#         if idx is not None:
-#             features.append(idx)
-#
-#
-#     # f143
-#     length = len(c_word)
-#     if length < 4:
-#         bucket = "short"
-#     elif length <= 7:
-#         bucket = "med"
-#     else:
-#         bucket = "long"
-#     idx = dict_of_dicts["f143"].get((bucket, c_tag))
-#     if idx is not None: features.append(idx)
-#
-#     # f304–f307
-#     for fc, neigh in [("f304", pp_word), ("f305", pp_word[:1]), ("f306", n_word[-1:]), ("f307", n_word[:1])]:
-#         idx = dict_of_dicts[fc].get((neigh, c_tag))
-#         if idx is not None: features.append(idx)
-#
-#     # f309–311
-#     for fc, cond in [
-#         ("f309", (pp_word == "*" and p_word != "*")),
-#         ("f310", (n_word == "~")),
-#         ("f311", (p_word != "*" and pp_word != "*" and n_word != "~"))
-#     ]:
-#         idx = dict_of_dicts[fc].get((cond, c_tag))
-#         if idx is not None: features.append(idx)
-#
-#     # # --- f118 — is_number
-#     # idx = dict_of_dicts["f118"].get(("is_number", c_tag))
-#     # if idx is not None:
-#     #     features.append(idx)
-#
-#     # # --- f119, f120, f121 — unknown-word features
-#     # unk_keys = [
-#     #     (c_word, c_tag),
-#     #     (p_tag, c_tag),
-#     #     (pp_tag, p_tag, c_tag)
-#     # ]
-#     # for i, key in enumerate(unk_keys, start=119):
-#     #     idx = dict_of_dicts[f"f{i}"].get(key)
-#     #     if idx is not None:
-#     #         features.append(idx)
-#     #
-#     # # replace your whole G8 lookup with this
-#     # for offset, label in enumerate(
-#     #         ["g8_1", "g8_2", "g8_3", "g8_4", "g8_5",
-#     #          "g8_6", "g8_7", "g8_8", "g8_9", "g8_10"],
-#     #         start=122
-#     # ):
-#     #     feat_class = f"f{offset}"  # 122..131
-#     #     idx = dict_of_dicts[feat_class].get((label, c_tag))
-#     #     if idx is not None:
-#     #         features.append(idx)
-#
-#     return features
-
 def represent_input_with_features(
     history: Tuple[str,str,str,str,str,str,str],
-    dict_of_dicts: Dict[str, Dict[Tuple, int]]
+    dict_of_dicts: Dict[str, Dict[Tuple, int]],
+    common_words: Set[str]
 ) -> List[int]:
     """
     Extract feature indices for a given history tuple.
@@ -592,7 +482,7 @@ def represent_input_with_features(
     features: List[int] = []
 
     def get_idx(feat_class, key):
-        return dict_of_dicts[feat_class].get(key)
+        return dict_of_dicts.get(feat_class, {}).get(key)
 
     # ── f100: <word, tag>
     idx = get_idx("f100", (c_word, c_tag))
@@ -762,6 +652,21 @@ def represent_input_with_features(
             idx = get_idx(feat_class, (cond, c_tag))
             if idx is not None: features.append(idx)
 
+    # f301 / f302 / f303 in one go, using get_idx
+    if any(ch in string.punctuation for ch in c_word):
+        idx = get_idx("f301", (True, c_tag))
+        if idx is not None:
+            features.append(idx)
+    if "-" in c_word:
+        idx = get_idx("f302", (True, c_tag))
+        if idx is not None:
+            features.append(idx)
+    if "." in c_word:
+        idx = get_idx("f303", (True, c_tag))
+        if idx is not None:
+            features.append(idx)
+
+
     return features
 
 
@@ -775,9 +680,11 @@ def preprocess_train(train_path, threshold):
     # e.g. threshold = 100 occurrences
     common_threshold = 100
     # you counted them in statistics.global_word_counts
-    global common_words
-    common_words = {w for w, cnt in statistics.global_word_counts.items() if cnt > common_threshold}
-    print(f"Keeping {len(common_words)} words as ‘common’ (>{common_threshold} occurrences).")
+    statistics.common_words = {
+        w for w, cnt in statistics.global_word_counts.items()
+        if cnt > common_threshold
+    }
+    print(f"Keeping {len(statistics.common_words)} words as ‘common’ (>{common_threshold} occurrences).")
 
     # feature2id
     feature2id = Feature2id(statistics, threshold)
@@ -825,7 +732,7 @@ def preprocess_train(train_path, threshold):
         # rebuild small_matrix if you’ll retrain
         rows, cols = [], []
         for i, hist in enumerate(statistics.histories):
-            for c in represent_input_with_features(hist, feature2id.feature_to_idx):
+            for c in represent_input_with_features(hist, feature2id.feature_to_idx, statistics.common_words):
                 rows.append(i); cols.append(c)
         feature2id.small_matrix = sparse.csr_matrix(
             (np.ones(len(rows)), (rows, cols)),
