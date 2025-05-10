@@ -620,7 +620,11 @@ def represent_input_with_features(
             if idx is not None: features.append(idx)
 
     # ── f300: common verb suffix
-    for suffix in ("ing","ed","en","s","es","ies"):
+    for suffix in ("ing", "ed", "en", "s", "es", "ies",
+                   "er", "est",  # comparatives & superlatives
+                   "ion", "ity", "ment", "ness",  # noun-forming
+                   "ly",  # adverbs
+                   "al", "ous", "ive", "able"):  # adjectives
         if c_word.lower().endswith(suffix):
             idx = get_idx("f300", (suffix, c_tag))
             if idx is not None: features.append(idx)
