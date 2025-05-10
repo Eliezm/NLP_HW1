@@ -540,90 +540,237 @@ def cross_validate(train_path, lam_values, th_values, n_splits=5, threshold=1):
     return best_lam, best_th
 
 
-def self_train(stat, ft2id, w, comp_words_path, conf_thresh=0.8, max_iter=3, lam=3, weights_path="weights2_st.pkl"):
-    print(f"[self_train] Starting self-training with conf_thresh={conf_thresh}, max_iter={max_iter}")
+def self_train(stat, ft2id, w, comp_words_path,
+               init_thresh=0.8, max_iter=3,
+               lam=3, weights_path="weights2_st.pkl"):
+    """
+    Semi-supervised self-training with:
+      • threshold decay: thresh_t = init_thresh – decay*(t-1)
+      • per-token pseudo-labeling (not all-or-nothing sentences)
+    """
     all_sents = read_test(comp_words_path, tagged=False)
     tags = [t for t in ft2id.feature_statistics.tags if t != "~"]
+    min_thresh = 0.7
+
+    decay = (init_thresh - min_thresh) / (max_iter - 1)
     for iteration in range(1, max_iter+1):
-        print(f"[self_train] Iteration {iteration}")
+        # 1) compute this iteration’s threshold
+        thresh_t = init_thresh - decay*(iteration-1)
+        print(f"[self_train] Iter {iteration}, per-token thresh={thresh_t:.2f}")
+
         new_histories = []
         for words, _ in all_sents:
-            token_tags = []
-            token_confs = []
+            # words already include ['*','*', w1,...,'~']
             for i in range(2, len(words)-1):
+                # classify token i
                 scores = []
                 for t in tags:
-                    hist = (words[i], t, words[i-1], "*", words[i-2], "*", words[i+1])
-                    feats = represent_input_with_features(hist,
-                                ft2id.feature_to_idx,
-                                ft2id.feature_statistics.common_words)
+                    hist = (words[i], t,
+                            words[i-1], "*",
+                            words[i-2], "*",
+                            words[i+1])
+                    feats = represent_input_with_features(
+                        hist, ft2id.feature_to_idx,
+                        ft2id.feature_statistics.common_words)
                     scores.append(sum(w[idx] for idx in feats))
+                # softmax
                 max_s = max(scores)
-                exps = [math.exp(s-max_s) for s in scores]
+                exps = [math.exp(s - max_s) for s in scores]
                 S = sum(exps)
                 probs = [e/S for e in exps]
                 best_i = int(np.argmax(probs))
-                token_tags.append(tags[best_i])
-                token_confs.append(probs[best_i])
-            if len(token_confs)>0 and min(token_confs) >= conf_thresh:
-                new_histories.extend(
-                    (words[i], token_tags[i-2], words[i-1],
-                     token_tags[i-3] if i>2 else "*",
-                     words[i-2], "*", words[i+1])
-                    for i in range(2, len(words)-1)
-                )
+                if probs[best_i] >= thresh_t:
+                    # add this single token’s history
+                    new_histories.append((
+                        words[i],
+                        tags[best_i],
+                        words[i-1],
+                        "*",            # we ignore prev-tag dependency for pseudo
+                        words[i-2],
+                        "*",
+                        words[i+1]
+                    ))
+
         if not new_histories:
-            print(f"[self_train] No new pseudo-labels in iteration {iteration}, stopping.")
+            print(f"[self_train] No new tokens >= thresh {thresh_t:.2f}, stopping.")
             break
+
+        # 2) incorporate pseudo-labels
         stat.histories.extend(new_histories)
-        print(f"[self_train] Added {len(new_histories)} pseudo-histories, total histories: {len(stat.histories)}")
+        print(f"[self_train] Added {len(new_histories)} pseudo-token histories; total histories = {len(stat.histories)}")
+
+        # 3) rebuild matrices & retrain
         ft2id.calc_represent_input_with_features()
-        print(f"[self_train] Retraining model with lam={lam}")
+        print(f"[self_train] Retraining model (lam={lam})")
         opt = get_optimal_vector(stat, ft2id, lam, weights_path, init_weights=w)
         w = opt[0]
         print(f"[self_train] Completed iteration {iteration}")
+
     return w
 
 
+
 def main():
-    print("=== STEP 1: Transfer/Fine-tuning ===")
-    old_w, old_map, ft2id = prune_old_model("weights_pruned.pkl", K=5000)
-    stat2, _ = preprocess_train("data/train2.wtag", threshold=1)
-    ft2id.feature_statistics = stat2
-    ft2id.calc_represent_input_with_features()
-    print("[main] Warm-starting weights from pruned model")
-    w0 = np.zeros(ft2id.n_total_features)
-    for fc,fmap in ft2id.feature_to_idx.items():
-        for feat,new_i in fmap.items():
-            old_i = old_map.get(feat)
-            if old_i is not None:
-                w0[new_i] = old_w[old_i]
-    opt = get_optimal_vector(stat2, ft2id, lam=3, weights_path="weights2.pkl", init_weights=w0)
-    w = opt[0]
-    print("=== STEP 2: Cross-Validation ===")
-    lam_values = [0.001, 0.01, 0.1, 1]
-    th_values  = [0.9,   0.85, 0.8]
-    best_lam, best_th = cross_validate("data/train2.wtag", lam_values, 1)
-    print(f"[main] CV results -> lam={best_lam}, thresh={best_th}")
-    print("=== STEP 3: Re-train with best lambda ===")
-    opt = get_optimal_vector(stat2, ft2id, lam=best_lam, weights_path="weights2_cv.pkl", init_weights=w)
-    w = opt[0]
+    # print("=== STEP 1: Transfer/Fine-tuning ===")
+    # old_w, old_map, ft2id = prune_old_model("weights_pruned.pkl", K=5000)
+    # stat2, _ = preprocess_train("data/train2.wtag", threshold=1)
+    # ft2id.feature_statistics = stat2
+    # ft2id.calc_represent_input_with_features()
+    # print("[main] Warm-starting weights from pruned model")
+    # w0 = np.zeros(ft2id.n_total_features)
+    # for fc,fmap in ft2id.feature_to_idx.items():
+    #     for feat,new_i in fmap.items():
+    #         old_i = old_map.get(feat)
+    #         if old_i is not None:
+    #             w0[new_i] = old_w[old_i]
+    # opt = get_optimal_vector(stat2, ft2id, lam=3, weights_path="weights2.pkl", init_weights=w0)
+    # w = opt[0]
+    # print("=== STEP 2: Cross-Validation ===")
+    # lam_values = [0.001, 0.01, 0.1, 1]
+    # th_values  = [0.9,   0.85, 0.8]
+    # best_lam, best_th = cross_validate("data/train2.wtag", lam_values, 1)
+    # print(f"[main] CV results -> lam={best_lam}, thresh={best_th}")
+    # print("=== STEP 3: Re-train with best lambda ===")
+    # opt = get_optimal_vector(stat2, ft2id, lam=best_lam, weights_path="weights2_cv.pkl", init_weights=w)
+    # w = opt[0]
+    # best_lamb = 0.001
+    # 1) Load or train full model
+    weights_path = "weights2_selfTrain.pkl"
+    if os.path.exists(weights_path):
+        print(f"[main] Loading pretrained model from {weights_path}")
+        with open(weights_path, "rb") as f:
+            (optimal_params, feature2id) = pickle.load(f)
+        # pull statistics back out of feature2id
+        statistics = feature2id.feature_statistics
+        w = optimal_params[0]
+
+    print("=== STEP 3b: Load the CV-tuned weights ===")
+    with open("weights2_cv.pkl", "rb") as f:
+        (opt_params_cv, ft2id) = pickle.load(f)
+    stat2 = ft2id.feature_statistics
+    w = opt_params_cv[0]
+    print(f"[main] Loaded w (len={len(w)}) and feature2id from weights2_cv.pkl")
+
     print("=== STEP 4: Semi-supervised Self-Training ===")
-    w = self_train(stat2, ft2id, w, "data/comp2.words", conf_thresh=best_th,
-                   max_iter=3, lam=best_lam, weights_path="weights2_selfTrain.pkl")
+    w = self_train(
+        stat2,
+        ft2id,
+        w,
+        comp_words_path="data/comp2.words",
+        init_thresh=1,     # or conf_thresh=best_th if you renamed
+        max_iter=3,
+        lam=0.001,
+        weights_path="weights2_selfTrain.pkl"
+    )
+
     print("=== STEP 5: Tagging final predictions ===")
-    tag_all_test(test_path="data/comp2.words",
-                 pre_trained_weights=w,
-                 feature2id=ft2id,
-                 predictions_path="predictions2_final.wtag")
-    if os.path.exists("data/test2.wtag"):
-        print("[main] Evaluating on data/test2.wtag")
-        words, gold, pred = predict_all("data/test2.wtag", ft2id, w)
-        acc = word_accuracy(gold, pred)
-        print(f"[main] Final word accuracy: {acc*100:.2f}%")
+    tag_all_test(
+        test_path="data/comp2.words",
+        pre_trained_weights=w,
+        feature2id=ft2id,
+        predictions_path="predictions2_final.wtag"
+    )
+    # if os.path.exists("data/test2.wtag"):
+    #     print("[main] Evaluating on data/test2.wtag")
+    #     words, gold, pred = predict_all("data/test2.wtag", ft2id, w)
+    #     acc = word_accuracy(gold, pred)
+    #     print(f"[main] Final word accuracy: {acc*100:.2f}%")
+
+import os
+from collections import Counter, defaultdict
+
+import spacy
+from spacy.tokens import Doc
+
+import re
+import spacy
+from spacy.tokenizer import Tokenizer
+
+def tag_with_spacy_whitespace(input_path: str, output_path: str):
+    """
+    Override spaCy’s tokenizer to split only on whitespace, then run
+    the full POS‐tagging pipeline so you get real TAGs (not all NN).
+    """
+    print("[SOTA] Loading spaCy model…")
+    nlp = spacy.load("en_core_web_sm", disable=["parser","ner"])
+    # Build a whitespace-only tokenizer
+    token_match = re.compile(r"[^ ]+").match
+    nlp.tokenizer = Tokenizer(nlp.vocab, token_match=token_match)
+
+    with open(input_path, encoding="utf8") as fin, \
+         open(output_path, "w", encoding="utf8") as fout:
+        for line in fin:
+            text = line.strip()
+            if not text:
+                fout.write("\n")
+                continue
+            # This nlp(text) will now split ONLY on spaces,
+            # then run tagger+morphologizer+attribute_ruler under the hood.
+            doc = nlp(text)
+            fout.write(" ".join(f"{tok.text}_{tok.tag_}" for tok in doc) + "\n")
+
+    print(f"[SOTA] spaCy-whitespace tagging complete → {output_path}")
+    # debug: sample
+    with open(output_path, encoding="utf8") as f:
+        print("[SOTA] Sample output:")
+        for _ in range(3):
+            print("   ", f.readline().strip())
+
+
+def compare_tags(my_path: str, sota_path: str):
+    """
+    Reads two tagged files (word_TAG sequences) and computes:
+     - overall token‐level agreement
+     - per‐tag confusion matrix, precision, recall
+    Assumes both are tokenized on spaces.
+    """
+    conf = Counter()          # counts of (gold=sota, pred=mine)
+    gold_counts = Counter()   # how many times each gold tag appears
+    pred_counts = Counter()   # how many times each pred tag appears
+    skipped = 0
+
+    with open(my_path, encoding="utf8") as fm, open(sota_path, encoding="utf8") as fs:
+        for idx, (lm, ls) in enumerate(zip(fm, fs), start=1):
+            toks_m = lm.strip().split()
+            toks_s = ls.strip().split()
+            if len(toks_m) != len(toks_s):
+                print(f"[compare_tags] Line {idx}: mismatch (mine={len(toks_m)}, sota={len(toks_s)}), skipping")
+                skipped += 1
+                continue
+            for wm_tm, ws_ts in zip(toks_m, toks_s):
+                tm = wm_tm.rsplit("_",1)[1]
+                ts = ws_ts.rsplit("_",1)[1]
+                conf[(ts, tm)] += 1
+                gold_counts[ts] += 1
+                pred_counts[tm] += 1
+
+    total = sum(gold_counts.values())
+    correct = sum(conf[(t, t)] for t in gold_counts)
+    print(f"\n=== Overall Agreement on {total} tokens (skipped {skipped} lines) ===")
+    print(f"  {correct}/{total} = {correct/total:.2%}\n")
+
+    print(f"{'TAG':6s}  {'P':>6s}  {'R':>6s}  {'F1':>6s}  support")
+    for tag in sorted(gold_counts):
+        tp = conf[(tag, tag)]
+        fp = sum(conf[(other, tag)] for other in gold_counts if other != tag)
+        fn = sum(conf[(tag, other)] for other in gold_counts if other != tag)
+        precision = tp / (tp+fp) if (tp+fp)>0 else 0.0
+        recall    = tp / (tp+fn) if (tp+fn)>0 else 0.0
+        f1 = 2*precision*recall/(precision+recall) if (precision+recall)>0 else 0.0
+        print(f"{tag:6s}  {precision:6.2%}  {recall:6.2%}  {f1:6.2%}  {gold_counts[tag]}")
 
 if __name__ == "__main__":
-    main()
+    RAW       = "data/comp2.words"               # your space-tokenized input
+    MY_TAGS   = "predictions2_final.wtag"        # your model’s output
+    SOTA_TAG  = "comp2_sota_whitespace.wtag"     # where we’ll write the SOTA tags
+
+    # 1) Tag with spaCy but preserve whitespace tokens
+    if not os.path.exists(SOTA_TAG):
+        tag_with_spacy_whitespace(RAW, SOTA_TAG)
+
+    # 2) Compare
+    compare_tags(MY_TAGS, SOTA_TAG)
+    # main()
 
 
 # if __name__=="__main__":
