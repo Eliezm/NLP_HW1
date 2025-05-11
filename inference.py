@@ -13,8 +13,13 @@ def memm_viterbi(sentence: list,
     Write your MEMM Viterbi implementation below
     You can implement Beam Search to improve runtime
     Implement q efficiently (refer to conditional probability definition in MEMM slides)
+
+    מימשנו את אלגוריתם ויטרבי על פי הפסאודוקוד שניתן לנו בהרצאה, מבדיקה קצרה זמני הריצה של האלגוריתם להיסק על 1000 משפטים היו,
+    בכל הרצה של המודל שלקחה לנו מס' דקות ואף יותר מ-10 דקות, מימשנו את הגרסה של ויטרבי עם beam search. ראינו שמעבר ל-K=5 אין שיפורים משמעותיים.
+    מימוש האלגוריתם באופן יעיל תרם לקיצור זמני התיוג מרבע שעה למס' דקות, ולכן יכולנו לבדוק יותר וריאציות של המודל שלנו בפחות זמן.
+
     """
-    K = 13
+    K = 5
 
     all_tags = [t for t in feature2id.feature_statistics.tags if t != "~"]
 

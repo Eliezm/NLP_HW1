@@ -59,12 +59,6 @@ class FeatureStatistics:
                              # sentence‐position flags
                              "f309", "f310", "f311",
                              "f143", # word length indicator
-                             # "f_wordbigram_prev2",  # prev-2 word + tag
-                             # "f_wordbigram_prev3",  # prev-3 word + tag
-                             # "f_wordbigram_next2",  # next-2 word + tag
-                             # "f_wordbigram_next3",  # next-3 word + tag
-                             # "f_sent_len",  # sentence-length bucket + tag
-
                              ]  # the feature classes used in the code
         self.feature_rep_dict = {fd: OrderedDict() for fd in feature_dict_list}
         '''
@@ -302,43 +296,6 @@ class FeatureStatistics:
                         self.feature_rep_dict["f307"][(n_word[:L], t)] = self.feature_rep_dict["f307"].get((n_word[:L], t),
                                                                                 0) + 1
 
-                    # Compute sentence length bucket once per sentence
-                    # (just before your `for i,(w,t) in enumerate(words_tags):` loop)
-                    n_tokens = len(words_tags)
-                    if n_tokens < 10:
-                        sent_bucket = "short"
-                    elif n_tokens < 20:
-                        sent_bucket = "med"
-                    else:
-                        sent_bucket = "long"
-
-                    # # … then inside the per‐token loop, after you have w,t:
-                    # # ─── extended context ──────────────────────────────────────────────────
-                    # # prev-2
-                    # if i >= 2:
-                    #     key = ((words_tags[i - 2][0], w), t)
-                    #     self.feature_rep_dict["f_wordbigram_prev2"][key] = \
-                    #         self.feature_rep_dict["f_wordbigram_prev2"].get(key, 0) + 1
-                    # # prev-3
-                    # if i >= 3:
-                    #     key = ((words_tags[i - 3][0], w), t)
-                    #     self.feature_rep_dict["f_wordbigram_prev3"][key] = \
-                    #         self.feature_rep_dict["f_wordbigram_prev3"].get(key, 0) + 1
-                    # # next-2
-                    # if i < len(words_tags) - 2:
-                    #     key = ((w, words_tags[i + 2][0]), t)
-                    #     self.feature_rep_dict["f_wordbigram_next2"][key] = \
-                    #         self.feature_rep_dict["f_wordbigram_next2"].get(key, 0) + 1
-                    # # next-3
-                    # if i < len(words_tags) - 3:
-                    #     key = ((w, words_tags[i + 3][0]), t)
-                    #     self.feature_rep_dict["f_wordbigram_next3"][key] = \
-                    #         self.feature_rep_dict["f_wordbigram_next3"].get(key, 0) + 1
-                    #
-                    # # ─── sentence-length bucket ────────────────────────────────────────────
-                    # key = (sent_bucket, t)
-                    # self.feature_rep_dict["f_sent_len"][key] = \
-                    #     self.feature_rep_dict["f_sent_len"].get(key, 0) + 1
 
                 for prev2, prev1, curr, next1 in zip(
                         padded,  # [x0, x1, ... xn]

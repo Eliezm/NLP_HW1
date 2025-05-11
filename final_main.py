@@ -199,7 +199,7 @@ if __name__=="__main__":
     # # (this re‐trains with best lam and zero‐init; you can skip if you want warm‐start)
     # stats2,ft2id=preprocess_train("data/train2.wtag",1); ft2id.calc_represent_input_with_features()
     # w_cv = get_optimal_vector(stats2,ft2id,lam,"weights2_cv.pkl")[0]
-    # open("weights2_cv.pkl","wb").write(pickle.dumps(((w_cv,),ft2id)))
-    # stage4_selftrain(lam=lam, init_thresh=th)
+    open("weights2_cv.pkl","wb").write(pickle.dumps(((w_cv,),ft2id)))
+    stage4_selftrain(lam=lam, init_thresh=th)
     stage5_tag()
     stage6_compare()
