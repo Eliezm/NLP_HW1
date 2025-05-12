@@ -24,240 +24,202 @@ def word_shape(w: str) -> str:
 
 class FeatureStatistics:
     def __init__(self):
-        self.n_total_features = 0  # Total number of features accumulated
-
-        # Init all features dictionaries
-        feature_dict_list = ["f100", "f101", "f102", "f103", "f104",
-                             "f105", "f106", "f107","f108","f109","f110",
-                             "f112",
-                             "f113",
-                                "f114",  # capital‐start
-                                "f115",  # init‐cap & first‐word
-                               # ——— new features ———
-                                     "f132",  # word‐shape
-                                     "f_char3",  # char 3‐grams
-                                     "f_char4",  # char 4‐grams
-                                     "f_wordbigram_prev",
-                                     "f_wordbigram_next",
-                                     "f_tagshape",  # cross of tag‐bigram × shape
-                             "f141",  # sentence-position bucket
-                             "f142",  # common-word flag
-                             # # common‐verb suffix
-                             "f300",
-                             # # prev/next word affixes
-                             "f304", "f305", "f306", "f307",
-                             # sentence‐position flags
-                             "f309", "f310", "f311",
-                             "f143", # word length indicator
-                             ]  # the feature classes used in the code
+        # list of feature‐classes
+        feature_dict_list = [
+            "f100","f101","f102","f103","f104",
+            "f105","f106","f107","f108","f109","f110","f112","f113",
+            "f114","f115","f132","f_char3","f_char4",
+            "f_wordbigram_prev","f_wordbigram_next","f_tagshape",
+            "f141","f142","f300","f304","f305","f306","f307",
+            "f309","f310","f311","f143"
+        ]
         self.feature_rep_dict = {fd: OrderedDict() for fd in feature_dict_list}
-        '''
-        A dictionary containing the counts of each data regarding a feature class. For example in f100, would contain
-        the number of times each (word, tag) pair appeared in the text.
-        '''
-        self.tags = set()  # a set of all the seen tags
-        self.tags.add("~")
-        self.tags_counts = defaultdict(int)  # a dictionary with the number of times each tag appeared in the text
-        self.words_count = defaultdict(int)  # a dictionary with the number of times each word appeared in the text
-        self.histories = []  # a list of all the histories seen at the test
-        self.words_count = defaultdict(int)
-        self.word_count_threshold = 1
 
-
+        self.tags = set(["~"])
+        self.histories = []
         self.global_word_counts = defaultdict(int)
         self.common_words = set()
 
-    def increase_instances_count(self, feat_class: str, key):
-        self.feature_rep_dict[feat_class][key] = self.feature_rep_dict[feat_class].get(key, 0) + 1
+    # ———————————————————————————————————————————————
+    # helper counters, *exactly* mirroring your old code:
+    # ———————————————————————————————————————————————
 
-    def increment_val_in_feature_dict(self, feat_class: str, key):
-        # alias for symmetry with your snippet
-        self.increase_instances_count(feat_class, key)
-
-
-    # --- helper methods for counting each feature group ---
-    def _count_word_tag_basics(self, w, t, pp_word, p_word, n_word):
-        # f100: (word, tag)
+    def _count_word_tag_basics(self, w, t, pp, p, n):
+        # f100
         self.feature_rep_dict["f100"][(w, t)] = self.feature_rep_dict["f100"].get((w, t), 0) + 1
-        # f101: suffixes
-        for L in range(1, min(4, len(w)) + 1):
+        # f101 suffixes
+        for L in range(1, min(4,len(w))+1):
             suf = w[-L:]
-            self.feature_rep_dict["f101"][(suf, t)] = self.feature_rep_dict["f101"].get((suf, t), 0) + 1
-        # f102: prefixes
-        for L in range(1, min(4, len(w)) + 1):
+            self.feature_rep_dict["f101"][(suf, t)] = self.feature_rep_dict["f101"].get((suf,t),0)+1
+        # f102 prefixes
+        for L in range(1, min(4,len(w))+1):
             pre = w[:L]
-            self.feature_rep_dict["f102"][(pre, t)] = self.feature_rep_dict["f102"].get((pre, t), 0) + 1
-        # f103: tag-trigram
-        if pp_word[0] is not None and p_word[0] is not None:
-            tri = (pp_word[1], p_word[1], t)
-            self.feature_rep_dict["f103"][tri] = self.feature_rep_dict["f103"].get(tri, 0) + 1
-        # f104: tag-bigram
-        if p_word[0] is not None:
-            bi = (p_word[1], t)
-            self.feature_rep_dict["f104"][bi] = self.feature_rep_dict["f104"].get(bi, 0) + 1
-        # f105: tag-unigram
-        self.feature_rep_dict["f105"][t] = self.feature_rep_dict["f105"].get(t, 0) + 1
-        # f106: prev-word+tag
-        if p_word[0] is not None:
-            self.feature_rep_dict["f106"][(p_word[0], t)] = self.feature_rep_dict["f106"].get((p_word[0], t), 0) + 1
-        # f107: next-word+tag
-        if n_word[0] is not None:
-            self.feature_rep_dict["f107"][(n_word[0], t)] = self.feature_rep_dict["f107"].get((n_word[0], t), 0) + 1
+            self.feature_rep_dict["f102"][(pre, t)] = self.feature_rep_dict["f102"].get((pre,t),0)+1
+        # f103 tag-trigram
+        if pp[0] is not None and p[0] is not None:
+            tri = (pp[1], p[1], t)
+            self.feature_rep_dict["f103"][tri] = self.feature_rep_dict["f103"].get(tri,0)+1
+        # f104 tag-bigram
+        if p[0] is not None:
+            bi = (p[1], t)
+            self.feature_rep_dict["f104"][bi] = self.feature_rep_dict["f104"].get(bi,0)+1
+        # f105 tag-unigram
+        self.feature_rep_dict["f105"][t] = self.feature_rep_dict["f105"].get(t,0)+1
+        # f106 prev-word+tag
+        if p[0] is not None:
+            key = (p[0], t)
+            self.feature_rep_dict["f106"][key] = self.feature_rep_dict["f106"].get(key,0)+1
+        # f107 next-word+tag
+        if n[0] is not None:
+            key = (n[0], t)
+            self.feature_rep_dict["f107"][key] = self.feature_rep_dict["f107"].get(key,0)+1
 
     def _count_orthographic(self, w, t):
-        # f108: has digit
+        # f108–f113
         if any(ch.isdigit() for ch in w):
-            self.feature_rep_dict["f108"][('has_digit', t)] = self.feature_rep_dict["f108"].get(('has_digit', t), 0) + 1
-        # f109: is numeric
+            self.feature_rep_dict["f108"][("has_digit",t)] = self.feature_rep_dict["f108"].get(("has_digit",t),0)+1
         if w.isdigit():
-            self.feature_rep_dict["f109"][('is_numeric', t)] = self.feature_rep_dict["f109"].get(('is_numeric', t), 0) + 1
-        # f110: has uppercase
+            self.feature_rep_dict["f109"][("is_numeric",t)] = self.feature_rep_dict["f109"].get(("is_numeric",t),0)+1
         if any(ch.isupper() for ch in w):
-            self.feature_rep_dict["f110"][('has_upper', t)] = self.feature_rep_dict["f110"].get(('has_upper', t), 0) + 1
-        # f112: all caps
+            self.feature_rep_dict["f110"][("has_upper",t)] = self.feature_rep_dict["f110"].get(("has_upper",t),0)+1
         if w.isupper():
-            self.feature_rep_dict["f112"][('all_caps', t)] = self.feature_rep_dict["f112"].get(('all_caps', t), 0) + 1
-        # f113: number-noun
-        head, sep, tail = w.partition("-")
-        if head.isdigit() and sep == "-" and not tail.isdigit():
-            self.feature_rep_dict["f113"][('num_noun', t)] = self.feature_rep_dict["f113"].get(('num_noun', t), 0) + 1
+            self.feature_rep_dict["f112"][("all_caps",t)] = self.feature_rep_dict["f112"].get(("all_caps",t),0)+1
+        head,sep,tail = w.partition("-")
+        if head.isdigit() and sep=="-" and not tail.isdigit():
+            self.feature_rep_dict["f113"][("num_noun",t)] = self.feature_rep_dict["f113"].get(("num_noun",t),0)+1
 
-    def _count_capitalization(self, w, t, position):
-        # f114: capital-start
+    def _count_capitalization(self, w, t, i):
+        # f114, f115
         if w and w[0].isupper() and w[0].isalpha():
-            self.feature_rep_dict["f114"][('capital_start', t)] = self.feature_rep_dict["f114"].get(('capital_start', t), 0) + 1
-        # f115: initcap_first
-        if w and w[0].isupper() and position == 0:
-            self.feature_rep_dict["f115"][('initcap_first', t)] = self.feature_rep_dict["f115"].get(('initcap_first', t), 0) + 1
+            self.feature_rep_dict["f114"][("capital_start",t)] = self.feature_rep_dict["f114"].get(("capital_start",t),0)+1
+            if i==0:
+                self.feature_rep_dict["f115"][("initcap_first",t)] = self.feature_rep_dict["f115"].get(("initcap_first",t),0)+1
 
     def _count_word_shape(self, w, t):
-        # f132: word shape
+        # f132
         shp = word_shape(w)
-        self.feature_rep_dict["f132"][(shp, t)] = self.feature_rep_dict["f132"].get((shp, t), 0) + 1
+        self.feature_rep_dict["f132"][(shp,t)] = self.feature_rep_dict["f132"].get((shp,t),0)+1
 
     def _count_char_ngrams(self, w, t):
-        # f_char3 & f_char4
-        for n, key in ((3, 'f_char3'), (4, 'f_char4')):
-            for j in range(len(w) - n + 1):
+        # f_char3, f_char4
+        for n,fn in ((3,"f_char3"),(4,"f_char4")):
+            for j in range(len(w)-n+1):
                 gram = w[j:j+n]
-                self.feature_rep_dict[key][(gram, t)] = self.feature_rep_dict[key].get((gram, t), 0) + 1
+                self.feature_rep_dict[fn][(gram,t)] = self.feature_rep_dict[fn].get((gram,t),0)+1
 
-    def _count_word_bigrams(self, w, t, pp_word, p_word, n_word):
+    def _count_word_bigrams(self, w, t, pp, p, n):
         # f_wordbigram_prev
-        if p_word:
-            self.feature_rep_dict['f_wordbigram_prev'][((p_word[0], w), t)] = self.feature_rep_dict['f_wordbigram_prev'].get(((p_word[0], w), t), 0) + 1
+        if p[0] is not None:
+            key = ((p[0],w),t)
+            self.feature_rep_dict["f_wordbigram_prev"][key] = self.feature_rep_dict["f_wordbigram_prev"].get(key,0)+1
         # f_wordbigram_next
-        if n_word:
-            self.feature_rep_dict['f_wordbigram_next'][((w, n_word[0]), t)] = self.feature_rep_dict['f_wordbigram_next'].get(((w, n_word[0]), t), 0) + 1
+        if n[0] is not None:
+            key = ((w,n[0]),t)
+            self.feature_rep_dict["f_wordbigram_next"][key] = self.feature_rep_dict["f_wordbigram_next"].get(key,0)+1
 
-    def _count_tagshape(self, p_tag, shp, t):
+    def _count_tagshape(self, pp_tag, shp, t):
         # f_tagshape
-        self.feature_rep_dict['f_tagshape'][((p_tag, t), shp)] = self.feature_rep_dict['f_tagshape'].get(((p_tag, t), shp), 0) + 1
+        key = ((pp_tag,t),shp)
+        self.feature_rep_dict["f_tagshape"][key] = self.feature_rep_dict["f_tagshape"].get(key,0)+1
 
-    def _count_position_bucket(self, t, pos_idx, sentence_len):
+    def _count_position_bucket(self, t, i, L):
         # f141
-        frac = pos_idx / float(sentence_len - 1) if sentence_len > 1 else 0.0
-        bucket = 'start' if frac < 0.25 else ('end' if frac > 0.75 else 'mid')
-        self.feature_rep_dict['f141'][(bucket, t)] = self.feature_rep_dict['f141'].get((bucket, t), 0) + 1
+        frac = i/float(L-1) if L>1 else 0.0
+        b = "start" if frac<0.25 else ("end" if frac>0.75 else "mid")
+        self.feature_rep_dict["f141"][(b,t)] = self.feature_rep_dict["f141"].get((b,t),0)+1
 
     def _count_common_word_flag(self, w, t):
-        # f142: only if w is in the set we just built
+        # f142
         if w in self.common_words:
-            self.feature_rep_dict['f142'][('common_word', t)] = \
-                self.feature_rep_dict['f142'].get(('common_word', t), 0) + 1
+            self.feature_rep_dict["f142"][("common_word",t)] = self.feature_rep_dict["f142"].get(("common_word",t),0)+1
 
     def _count_verb_suffix(self, w, t):
         # f300
-        for suf in ('ing','ed','en','s','es','ies'):
+        for suf in ("ing","ed","en","s","es","ies"):
             if w.lower().endswith(suf):
-                self.feature_rep_dict['f300'][(suf,t)] = self.feature_rep_dict['f300'].get((suf,t),0) + 1
+                self.feature_rep_dict["f300"][(suf,t)] = self.feature_rep_dict["f300"].get((suf,t),0)+1
                 break
 
-    def _count_neighbor_affixes(self, w, t, pp_word, p_word, n_word):
-        # f304-307 suffixes/prefixes of neighbors
-        for key, neigh in [('f304', pp_word), ('f305', pp_word[:1]),
-                           ('f306', n_word[-1:]), ('f307', n_word[:1])]:
-            if neigh is not None:
-                self.feature_rep_dict[key][(neigh, t)] = self.feature_rep_dict[key].get((neigh, t),0) + 1
+    def _count_neighbor_affixes(self, w, t, pp, p, n):
+        # f304–307 mirror your original suffix/prefix logic
+        if pp[0] is not None:
+            prevw = pp[0]
+            for L in range(1, min(4,len(prevw))+1):
+                suf = prevw[-L:]
+                self.feature_rep_dict["f304"][(suf,t)] = self.feature_rep_dict["f304"].get((suf,t),0)+1
+            pre = prevw[:1]
+            self.feature_rep_dict["f305"][(pre,t)] = self.feature_rep_dict["f305"].get((pre,t),0)+1
+        if n[0] is not None:
+            nextw = n[0]
+            for L in range(1, min(4,len(nextw))+1):
+                suf = nextw[-L:]
+                self.feature_rep_dict["f306"][(suf,t)] = self.feature_rep_dict["f306"].get((suf,t),0)+1
+            pre = nextw[:1]
+            self.feature_rep_dict["f307"][(pre,t)] = self.feature_rep_dict["f307"].get((pre,t),0)+1
 
-    def _count_position_flags(self, pp_word, p_word, n_word, t):
-        # f309: second
-        self.feature_rep_dict['f309'][((pp_word is None and p_word is not None), t)] = \
-            self.feature_rep_dict['f309'].get(((pp_word is None and p_word is not None), t),0) + 1
-        # f310: last
-        self.feature_rep_dict['f310'][((n_word is None), t)] = self.feature_rep_dict['f310'].get(((n_word is None), t),0) + 1
-        # f311: middle
-        cond = (p_word is not None and pp_word is not None and n_word is not None)
-        self.feature_rep_dict['f311'][(cond, t)] = self.feature_rep_dict['f311'].get((cond, t),0) + 1
+    def _count_position_flags(self, pp, p, n, t):
+        # f309, f310, f311
+        cond2 = (pp[0] is None and p[0] is not None)
+        self.feature_rep_dict["f309"][(cond2,t)] = self.feature_rep_dict["f309"].get((cond2,t),0)+1
+        cond_last = (n[0] is None)
+        self.feature_rep_dict["f310"][(cond_last,t)] = self.feature_rep_dict["f310"].get((cond_last,t),0)+1
+        cond_mid = (p[0] is not None and pp[0] is not None and n[0] is not None)
+        self.feature_rep_dict["f311"][(cond_mid,t)] = self.feature_rep_dict["f311"].get((cond_mid,t),0)+1
 
     def _count_word_length(self, w, t):
         # f143
         l = len(w)
-        bucket = 'short' if l<4 else ('med' if l<=7 else 'long')
-        self.feature_rep_dict['f143'][(bucket,t)] = self.feature_rep_dict['f143'].get((bucket,t),0) + 1
+        b = "short" if l<4 else ("med" if l<=7 else "long")
+        self.feature_rep_dict["f143"][(b,t)] = self.feature_rep_dict["f143"].get((b,t),0)+1
 
-    def get_word_tag_pair_count(self, file_path) -> None:
-        """
-        Count raw feature events f100–f113 and G2–G8 (f114–f131) in two passes.
-        """
+    # ———————————————————————————————————————————————
+    # the two-pass driver:
+    # ———————————————————————————————————————————————
 
-        # padding templates
-        PAD_LEFT = [("*", "*"), ("*", "*")]
-        PAD_RIGHT = [("~", "~")]
+    def get_word_tag_pair_count(self, file_path):
+        PAD_LEFT = [("*","*"),("*","*")]
+        PAD_RIGHT = [("~","~")]
 
-        # ——— PASS 1: build global counts ———
-        with open(file_path, encoding='utf8') as f:
+        # pass 1 → global counts → common_words
+        with open(file_path, encoding="utf8") as f:
             for line in f:
-                line = line.rstrip("\n")
-                for wt in line.split():
-                    w, _ = wt.split("_")
+                for wt in line.rstrip("\n").split():
+                    w,_ = wt.split("_")
                     self.global_word_counts[w] += 1
+        self.common_words = {w for w,c in self.global_word_counts.items() if c>100}
 
-        # derive common_words once
-        common_threshold = 100
-        self.common_words = {w for w, c in self.global_word_counts.items() if c > common_threshold}
-
-        # ——— PASS 2: count features & collect histories ———
-        with open(file_path, encoding='utf8') as f:
+        # pass 2 → actual feature counts + histories
+        with open(file_path, encoding="utf8") as f:
             for line in f:
-                line = line.rstrip("\n")
-                words_tags = [wt.split("_") for wt in line.split()]
-                sentence_len = len(words_tags)
+                words_tags = [wt.split("_") for wt in line.rstrip("\n").split()]
+                # record all tags
+                for _, tag in words_tags:
+                    self.tags.add(tag)
+                L = len(words_tags)
                 padded = PAD_LEFT + words_tags + PAD_RIGHT
 
-                # count each token’s features
-                for i, (w, t) in enumerate(words_tags):
-                    # fetch context tuples
-                    pp = padded[i]  # (word_{i-2}, tag_{i-2})
-                    p = padded[i + 1]  # (word_{i-1}, tag_{i-1})
-                    n = padded[i + 2]  # (word_{i+1}, tag_{i+1})
+                # count
+                for i,(w,t) in enumerate(words_tags):
+                    pp,p,n = padded[i], padded[i+1], padded[i+2]
+                    self._count_word_tag_basics   (w,t,pp,p,n)
+                    self._count_orthographic      (w,t)
+                    self._count_capitalization    (w,t,i)
+                    self._count_word_shape        (w,t)
+                    self._count_char_ngrams       (w,t)
+                    self._count_word_bigrams      (w,t,pp,p,n)
+                    self._count_tagshape          (p[1], word_shape(w), t)
+                    self._count_position_bucket   (t,i,L)
+                    self._count_common_word_flag  (w,t)
+                    self._count_verb_suffix       (w,t)
+                    self._count_neighbor_affixes  (w,t,pp,p,n)
+                    self._count_position_flags    (pp,p,n,t)
+                    self._count_word_length       (w,t)
 
-                    self._count_word_tag_basics(w, t, pp, p, n)
-                    self._count_orthographic(w, t)
-                    self._count_capitalization(w, t, i)
-                    self._count_word_shape(w, t)
-                    self._count_char_ngrams(w, t)
-                    self._count_word_bigrams(w, t, pp, p, n)
-                    self._count_tagshape(p[1], word_shape(w), t)
-                    self._count_position_bucket(t, i, sentence_len)
-                    self._count_common_word_flag(w, t)
-                    self._count_verb_suffix(w, t)
-                    self._count_neighbor_affixes(w, t, pp, p, n)
-                    self._count_position_flags(pp, p, n, t)
-                    self._count_word_length(w, t)
+                # histories
+                full = PAD_LEFT + words_tags + PAD_RIGHT
+                for a,b,c,d in zip(full, full[1:], full[2:], full[3:]):
+                    self.histories.append((c[0],c[1], b[0],b[1], a[0],a[1], d[0]))
 
-                # build histories for MEMM training
-                padded_full = PAD_LEFT + words_tags + PAD_RIGHT
-                for prev2, prev1, curr, nxt in zip(padded_full,
-                                                   padded_full[1:],
-                                                   padded_full[2:],
-                                                   padded_full[3:]):
-                    self.histories.append((
-                        curr[0], curr[1],
-                        prev1[0], prev1[1],
-                        prev2[0], prev2[1],
-                        nxt[0]
-                    ))
 
 
 class Feature2id:
@@ -313,7 +275,7 @@ class Feature2id:
         # 4) rebuild small_matrix (for training)
         rows, cols = [], []
         for i, hist in enumerate(self.feature_statistics.histories):
-            for c in represent_input_with_features(hist, self.feature_to_idx):
+            for c in represent_input_with_features(hist,self.feature_to_idx,self.feature_statistics.common_words):
                 rows.append(i)
                 cols.append(c)
         self.small_matrix = sparse.csr_matrix(
@@ -347,13 +309,13 @@ class Feature2id:
         small_rows = []
         small_cols = []
         for small_r, hist in enumerate(self.feature_statistics.histories):
-            for c in represent_input_with_features(hist, self.feature_to_idx):
+            for c in represent_input_with_features(hist,self.feature_to_idx,self.feature_statistics.common_words):
                 small_rows.append(small_r)
                 small_cols.append(c)
             for r, y_tag in enumerate(self.feature_statistics.tags):
                 demi_hist = (hist[0], y_tag, hist[2], hist[3], hist[4], hist[5], hist[6])
                 self.histories_features[demi_hist] = []
-                for c in represent_input_with_features(demi_hist, self.feature_to_idx):
+                for c in represent_input_with_features(demi_hist, self.feature_to_idx, self.feature_statistics.common_words):
                     big_rows.append(big_r)
                     big_cols.append(c)
                     self.histories_features[demi_hist].append(c)
@@ -445,16 +407,19 @@ def _fe_orthographic(history: Tuple, dicts: Dict[str, Dict]):
     return feats
 
 
-def _fe_capitalization(history: Tuple, dicts: Dict[str, Dict], position: int):
+def _fe_capitalization(history: Tuple[str,str,str,str,str,str,str],
+                       dicts: Dict[str, Dict[Tuple,int]]):
     """
     f114: capital_start; f115: initcap_first
+    Uses pads: pp_word == "*", p_word != "*"
     """
-    c_word, c_tag, *_ = history
+    c_word, c_tag, p_word, _, pp_word, _, _ = history
     feats: List[int] = []
-    if c_word and c_word[0].isupper() and c_word[0].isalpha():
+    if c_word and c_word[0].isupper():
         idx = dicts["f114"].get(("capital_start", c_tag))
         if idx is not None: feats.append(idx)
-        if position == 0:
+        # first-word = only pads before
+        if pp_word == "*" and p_word != "*":
             idx2 = dicts["f115"].get(("initcap_first", c_tag))
             if idx2 is not None: feats.append(idx2)
     return feats
@@ -505,13 +470,24 @@ def _fe_tagshape(history: Tuple, dicts: Dict[str, Dict]):
     return feats
 
 
-def _fe_position_bucket(history: Tuple, dicts: Dict[str, Dict], position: int, sentence_len: int):
-    """f141: sentence-position bucket"""
-    c_word, c_tag, *_ = history
+
+def _fe_position_bucket(history: Tuple[str,str,str,str,str,str,str],
+                        dicts: Dict[str, Dict[Tuple,int]]):
+    """
+    f141: sentence-position bucket
+    start  = pp_word=="*" & p_word!="*"
+    end    =   n_word=="~"
+    mid    = otherwise
+    """
+    _, c_tag, p_word, _, pp_word, _, n_word = history
     feats: List[int] = []
-    frac = position / float(sentence_len - 1) if sentence_len > 1 else 0.0
-    bucket = 'start' if frac < 0.25 else ('end' if frac > 0.75 else 'mid')
-    idx = dicts['f141'].get((bucket, c_tag))
+    if pp_word == "*" and p_word != "*":
+        bucket = "start"
+    elif n_word == "~":
+        bucket = "end"
+    else:
+        bucket = "mid"
+    idx = dicts["f141"].get((bucket, c_tag))
     if idx is not None: feats.append(idx)
     return feats
 
@@ -580,25 +556,45 @@ def _fe_word_length(history: Tuple, dicts: Dict[str, Dict]):
     return feats
 
 # main dispatcher:
-def represent_input_with_features(history: Tuple, dicts: Dict[str, Dict], common_words: set, position: int=None, sentence_len: int=None) -> List[int]:
-    features: List[int] = []
-    features += _fe_word_tag_basics(history, dicts)
-    features += _fe_orthographic(history, dicts)
-    # position and sentence_len must be passed in by caller for below:
-    if position is not None:
-        features += _fe_capitalization(history, dicts, position)
-    features += _fe_word_shape(history, dicts)
-    features += _fe_char_ngrams(history, dicts)
-    features += _fe_word_bigrams(history, dicts)
-    features += _fe_tagshape(history, dicts)
-    if position is not None and sentence_len is not None:
-        features += _fe_position_bucket(history, dicts, position, sentence_len)
-        features += _fe_common_word_flag(history, dicts, common_words)
-    features += _fe_verb_suffix(history, dicts)
-    features += _fe_neighbor_affixes(history, dicts)
-    features += _fe_position_flags(history, dicts)
-    features += _fe_word_length(history, dicts)
-    return features
+def represent_input_with_features(
+    history: Tuple[str,str,str,str,str,str,str],
+    dicts:   Dict[str, Dict[Tuple, int]],
+    common_words: set
+) -> List[int]:
+    """
+    history = (c_word, c_tag, p_word, p_tag, pp_word, pp_tag, n_word)
+    dicts   = feature_class → { feature_key → idx }
+    common_words = high-freq word set
+    """
+    feats: List[int] = []
+    # f100–f107 … your _fe_word_tag_basics does all of these
+    feats += _fe_word_tag_basics(history, dicts)
+    # f108–f113
+    feats += _fe_orthographic(history, dicts)
+    # f114–f115 (no extra args needed)
+    feats += _fe_capitalization(history, dicts)
+    # f132, f_char3, f_char4
+    feats += _fe_word_shape(history, dicts)
+    feats += _fe_char_ngrams(history, dicts)
+    # f_wordbigram_prev, f_wordbigram_next
+    feats += _fe_word_bigrams(history, dicts)
+    # f_tagshape
+    feats += _fe_tagshape(history, dicts)
+    # f141
+    feats += _fe_position_bucket(history, dicts)
+    # f142
+    feats += _fe_common_word_flag(history, dicts, common_words)
+    # f300
+    feats += _fe_verb_suffix(history, dicts)
+    # f304–f307
+    feats += _fe_neighbor_affixes(history, dicts)
+    # f309–f311
+    feats += _fe_position_flags(history, dicts)
+    # f143
+    feats += _fe_word_length(history, dicts)
+
+    return feats
+
 
 
 def preprocess_train(train_path, threshold):
