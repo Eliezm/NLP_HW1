@@ -81,6 +81,8 @@
 
 #!/usr/bin/env python3
 import pickle
+import numpy as np
+
 from preprocessing import preprocess_train
 from evaluate      import predict_all, word_accuracy
 
@@ -89,18 +91,31 @@ PKL_FILE = "w1_10k_noextctx.pkl"
 THRESH   = 1
 PRUNE_TO = 10000
 
-# 1) load the weight vector
+# 1) load what's in the pickle
 with open(PKL_FILE, "rb") as f:
-    w_10k = pickle.load(f)
+    data = pickle.load(f)
 
-# 2) rebuild the exact same pruning map
+# 2) unpack to get the actual numpy‐vector
+#    common patterns:
+if isinstance(data, tuple) and isinstance(data[0], (list, tuple, np.ndarray)):
+    # sometimes it's ((w,), f2i) or (w_vector,)
+    candidate = data[0]
+    if isinstance(candidate, (list, tuple)) and len(candidate)==1:
+        w_10k = np.asarray(candidate[0])
+    else:
+        w_10k = np.asarray(candidate)
+else:
+    # assume it's already the raw array
+    w_10k = np.asarray(data)
+
+# 3) rebuild exactly the same feature‐to‐idx map
 stats, f2i = preprocess_train(TRAIN1, threshold=THRESH)
 f2i.calc_represent_input_with_features()
 
-# 3) prune f2i down to top-PRUNE_TO features (so the idx→weight alignment matches)
+# 4) prune the mapping down so indices line up
 f2i.prune_top_k_by_weight(w_10k, PRUNE_TO)
 
-# 4) now run predict_all on the train file
+# 5) evaluate on train
 _, gold_tr, pred_tr = predict_all(TRAIN1, f2i, w_10k)
 acc_tr = word_accuracy(gold_tr, pred_tr)
 print(f"→ Word‐level train accuracy = {acc_tr*100:.2f}%")

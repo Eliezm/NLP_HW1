@@ -15,7 +15,3 @@ print("Features per family:")
 for feat_class, fmap in feature2id.feature_to_idx.items():
     print(f"  {feat_class:12s}: {len(fmap)}")
 
-# if you want to see the actual feature keys for one family, uncomment:
-# e.g. list the first 20 suffix‐features (f101):
-# sample = list(feature2id.feature_to_idx["f101"].keys())[:20]
-# print("\nSample f101 suffixes:", sample)
