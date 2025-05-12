@@ -29,13 +29,10 @@ class FeatureStatistics:
         # Init all features dictionaries
         feature_dict_list = ["f100", "f101", "f102", "f103", "f104",
                              "f105", "f106", "f107","f108","f109","f110",
-                             # "f111",
                              "f112",
                              "f113",
                                 "f114",  # capital‐start
                                 "f115",  # init‐cap & first‐word
-                                # "f116",  # init‐cap & not‐first
-                                # "f117",  # ALL‐CAPS
                                # ——— new features ———
                                      "f132",  # word‐shape
                                      "f_char3",  # char 3‐grams
@@ -43,18 +40,12 @@ class FeatureStatistics:
                                      "f_wordbigram_prev",
                                      "f_wordbigram_next",
                                      "f_tagshape",  # cross of tag‐bigram × shape
-                             # "f138",  # word-shape
                              "f141",  # sentence-position bucket
                              "f142",  # common-word flag
-                             # new boolean and count‐features
-                             # new Boolean & positional features:
-                             "f200", "f201", "f202", "f203", "f204",
                              # # common‐verb suffix
                              "f300",
-                             # # punctuation / hyphen / dot
-                             # "f301", "f302", "f303",
                              # # prev/next word affixes
-                             "f304", "f305", "f306", "f307", "f308",
+                             "f304", "f305", "f306", "f307",
                              # sentence‐position flags
                              "f309", "f310", "f311",
                              "f143", # word length indicator
@@ -83,244 +74,190 @@ class FeatureStatistics:
         # alias for symmetry with your snippet
         self.increase_instances_count(feat_class, key)
 
+
+    # --- helper methods for counting each feature group ---
+    def _count_word_tag_basics(self, w, t, pp_word, p_word, n_word):
+        # f100: (word, tag)
+        self.feature_rep_dict["f100"][(w, t)] = self.feature_rep_dict["f100"].get((w, t), 0) + 1
+        # f101: suffixes
+        for L in range(1, min(4, len(w)) + 1):
+            suf = w[-L:]
+            self.feature_rep_dict["f101"][(suf, t)] = self.feature_rep_dict["f101"].get((suf, t), 0) + 1
+        # f102: prefixes
+        for L in range(1, min(4, len(w)) + 1):
+            pre = w[:L]
+            self.feature_rep_dict["f102"][(pre, t)] = self.feature_rep_dict["f102"].get((pre, t), 0) + 1
+        # f103: tag-trigram
+        if pp_word[0] is not None and p_word[0] is not None:
+            tri = (pp_word[1], p_word[1], t)
+            self.feature_rep_dict["f103"][tri] = self.feature_rep_dict["f103"].get(tri, 0) + 1
+        # f104: tag-bigram
+        if p_word[0] is not None:
+            bi = (p_word[1], t)
+            self.feature_rep_dict["f104"][bi] = self.feature_rep_dict["f104"].get(bi, 0) + 1
+        # f105: tag-unigram
+        self.feature_rep_dict["f105"][t] = self.feature_rep_dict["f105"].get(t, 0) + 1
+        # f106: prev-word+tag
+        if p_word[0] is not None:
+            self.feature_rep_dict["f106"][(p_word[0], t)] = self.feature_rep_dict["f106"].get((p_word[0], t), 0) + 1
+        # f107: next-word+tag
+        if n_word[0] is not None:
+            self.feature_rep_dict["f107"][(n_word[0], t)] = self.feature_rep_dict["f107"].get((n_word[0], t), 0) + 1
+
+    def _count_orthographic(self, w, t):
+        # f108: has digit
+        if any(ch.isdigit() for ch in w):
+            self.feature_rep_dict["f108"][('has_digit', t)] = self.feature_rep_dict["f108"].get(('has_digit', t), 0) + 1
+        # f109: is numeric
+        if w.isdigit():
+            self.feature_rep_dict["f109"][('is_numeric', t)] = self.feature_rep_dict["f109"].get(('is_numeric', t), 0) + 1
+        # f110: has uppercase
+        if any(ch.isupper() for ch in w):
+            self.feature_rep_dict["f110"][('has_upper', t)] = self.feature_rep_dict["f110"].get(('has_upper', t), 0) + 1
+        # f112: all caps
+        if w.isupper():
+            self.feature_rep_dict["f112"][('all_caps', t)] = self.feature_rep_dict["f112"].get(('all_caps', t), 0) + 1
+        # f113: number-noun
+        head, sep, tail = w.partition("-")
+        if head.isdigit() and sep == "-" and not tail.isdigit():
+            self.feature_rep_dict["f113"][('num_noun', t)] = self.feature_rep_dict["f113"].get(('num_noun', t), 0) + 1
+
+    def _count_capitalization(self, w, t, position):
+        # f114: capital-start
+        if w and w[0].isupper() and w[0].isalpha():
+            self.feature_rep_dict["f114"][('capital_start', t)] = self.feature_rep_dict["f114"].get(('capital_start', t), 0) + 1
+        # f115: initcap_first
+        if w and w[0].isupper() and position == 0:
+            self.feature_rep_dict["f115"][('initcap_first', t)] = self.feature_rep_dict["f115"].get(('initcap_first', t), 0) + 1
+
+    def _count_word_shape(self, w, t):
+        # f132: word shape
+        shp = word_shape(w)
+        self.feature_rep_dict["f132"][(shp, t)] = self.feature_rep_dict["f132"].get((shp, t), 0) + 1
+
+    def _count_char_ngrams(self, w, t):
+        # f_char3 & f_char4
+        for n, key in ((3, 'f_char3'), (4, 'f_char4')):
+            for j in range(len(w) - n + 1):
+                gram = w[j:j+n]
+                self.feature_rep_dict[key][(gram, t)] = self.feature_rep_dict[key].get((gram, t), 0) + 1
+
+    def _count_word_bigrams(self, w, t, pp_word, p_word, n_word):
+        # f_wordbigram_prev
+        if p_word:
+            self.feature_rep_dict['f_wordbigram_prev'][((p_word[0], w), t)] = self.feature_rep_dict['f_wordbigram_prev'].get(((p_word[0], w), t), 0) + 1
+        # f_wordbigram_next
+        if n_word:
+            self.feature_rep_dict['f_wordbigram_next'][((w, n_word[0]), t)] = self.feature_rep_dict['f_wordbigram_next'].get(((w, n_word[0]), t), 0) + 1
+
+    def _count_tagshape(self, p_tag, shp, t):
+        # f_tagshape
+        self.feature_rep_dict['f_tagshape'][((p_tag, t), shp)] = self.feature_rep_dict['f_tagshape'].get(((p_tag, t), shp), 0) + 1
+
+    def _count_position_bucket(self, t, pos_idx, sentence_len):
+        # f141
+        frac = pos_idx / float(sentence_len - 1) if sentence_len > 1 else 0.0
+        bucket = 'start' if frac < 0.25 else ('end' if frac > 0.75 else 'mid')
+        self.feature_rep_dict['f141'][(bucket, t)] = self.feature_rep_dict['f141'].get((bucket, t), 0) + 1
+
+    def _count_common_word_flag(self, w, t):
+        # f142: only if w is in the set we just built
+        if w in self.common_words:
+            self.feature_rep_dict['f142'][('common_word', t)] = \
+                self.feature_rep_dict['f142'].get(('common_word', t), 0) + 1
+
+    def _count_verb_suffix(self, w, t):
+        # f300
+        for suf in ('ing','ed','en','s','es','ies'):
+            if w.lower().endswith(suf):
+                self.feature_rep_dict['f300'][(suf,t)] = self.feature_rep_dict['f300'].get((suf,t),0) + 1
+                break
+
+    def _count_neighbor_affixes(self, w, t, pp_word, p_word, n_word):
+        # f304-307 suffixes/prefixes of neighbors
+        for key, neigh in [('f304', pp_word), ('f305', pp_word[:1]),
+                           ('f306', n_word[-1:]), ('f307', n_word[:1])]:
+            if neigh is not None:
+                self.feature_rep_dict[key][(neigh, t)] = self.feature_rep_dict[key].get((neigh, t),0) + 1
+
+    def _count_position_flags(self, pp_word, p_word, n_word, t):
+        # f309: second
+        self.feature_rep_dict['f309'][((pp_word is None and p_word is not None), t)] = \
+            self.feature_rep_dict['f309'].get(((pp_word is None and p_word is not None), t),0) + 1
+        # f310: last
+        self.feature_rep_dict['f310'][((n_word is None), t)] = self.feature_rep_dict['f310'].get(((n_word is None), t),0) + 1
+        # f311: middle
+        cond = (p_word is not None and pp_word is not None and n_word is not None)
+        self.feature_rep_dict['f311'][(cond, t)] = self.feature_rep_dict['f311'].get((cond, t),0) + 1
+
+    def _count_word_length(self, w, t):
+        # f143
+        l = len(w)
+        bucket = 'short' if l<4 else ('med' if l<=7 else 'long')
+        self.feature_rep_dict['f143'][(bucket,t)] = self.feature_rep_dict['f143'].get((bucket,t),0) + 1
+
     def get_word_tag_pair_count(self, file_path) -> None:
         """
-        Count raw feature events f100–f113 and G2–G8 (f114–f131).
+        Count raw feature events f100–f113 and G2–G8 (f114–f131) in two passes.
         """
 
-        def is_digit_char(ch: str) -> bool:
-            return ch.isdigit()
+        # padding templates
+        PAD_LEFT = [("*", "*"), ("*", "*")]
+        PAD_RIGHT = [("~", "~")]
 
-        def is_numeric_word(word: str) -> bool:
-            # all digits, no separators
-            return word.isdigit()
-
-        with open(file_path, encoding="utf8") as file:
-            for line in file:
+        # ——— PASS 1: build global counts ———
+        with open(file_path, encoding='utf8') as f:
+            for line in f:
                 line = line.rstrip("\n")
-                words_tags = [wt.split("_") for wt in line.split()]
-                PAD_LEFT = [("*", "*"), ("*", "*")]
-                PAD_RIGHT = [("~", "~")]
-                padded = PAD_LEFT + words_tags + PAD_RIGHT
-
-
-
-                for i, (w, t) in enumerate(words_tags):
-                    # ── track raw word counts ─────────────────────────────────────
+                for wt in line.split():
+                    w, _ = wt.split("_")
                     self.global_word_counts[w] += 1
 
-                    self.tags.add(t)
+        # derive common_words once
+        common_threshold = 100
+        self.common_words = {w for w, c in self.global_word_counts.items() if c > common_threshold}
 
-                    # safe–lookup helper
-                    def safe(tags, idx, default):
-                        return tags[idx] if 0 <= idx < len(tags) else default
+        # ——— PASS 2: count features & collect histories ———
+        with open(file_path, encoding='utf8') as f:
+            for line in f:
+                line = line.rstrip("\n")
+                words_tags = [wt.split("_") for wt in line.split()]
+                sentence_len = len(words_tags)
+                padded = PAD_LEFT + words_tags + PAD_RIGHT
 
-                    # now pull out previous‐previous, previous, next
-                    pp_word, pp_tag = safe(words_tags, i - 2, ("*", "*"))
-                    p_word, p_tag = safe(words_tags, i - 1, ("*", "*"))
-                    n_word, n_tag = safe(words_tags, i + 1, ("~", "~"))
+                # count each token’s features
+                for i, (w, t) in enumerate(words_tags):
+                    # fetch context tuples
+                    pp = padded[i]  # (word_{i-2}, tag_{i-2})
+                    p = padded[i + 1]  # (word_{i-1}, tag_{i-1})
+                    n = padded[i + 2]  # (word_{i+1}, tag_{i+1})
 
-                    # ── f100–f107 ─────────────────────────────────────────────────
-                    # f100
-                    self.feature_rep_dict["f100"][(w, t)] = self.feature_rep_dict["f100"].get((w, t), 0) + 1
-                    # f101 suffixes
-                    for L in range(1, min(4, len(w)) + 1):
-                        key = (w[-L:], t)
-                        self.feature_rep_dict["f101"][key] = self.feature_rep_dict["f101"].get(key, 0) + 1
-                    # f102 prefixes
-                    for L in range(1, min(4, len(w)) + 1):
-                        key = (w[:L], t)
-                        self.feature_rep_dict["f102"][key] = self.feature_rep_dict["f102"].get(key, 0) + 1
-                    # f103 tag-trigram
-                    if i >= 2:
-                        tri = (words_tags[i - 2][1], words_tags[i - 1][1], t)
-                        self.feature_rep_dict["f103"][tri] = self.feature_rep_dict["f103"].get(tri, 0) + 1
-                    # f104 tag-bigram
-                    if i >= 1:
-                        bi = (words_tags[i - 1][1], t)
-                        self.feature_rep_dict["f104"][bi] = self.feature_rep_dict["f104"].get(bi, 0) + 1
-                    # f105 tag-unigram
-                    self.feature_rep_dict["f105"][t] = self.feature_rep_dict["f105"].get(t, 0) + 1
-                    # f106 prev-word + tag
-                    if i >= 1:
-                        prevw = words_tags[i - 1][0]
-                        key = (prevw, t)
-                        self.feature_rep_dict["f106"][key] = self.feature_rep_dict["f106"].get(key, 0) + 1
-                    # f107 next-word + tag
-                    if i < len(words_tags) - 1:
-                        nextw = words_tags[i + 1][0]
-                        key = (nextw, t)
-                        self.feature_rep_dict["f107"][key] = self.feature_rep_dict["f107"].get(key, 0) + 1
+                    self._count_word_tag_basics(w, t, pp, p, n)
+                    self._count_orthographic(w, t)
+                    self._count_capitalization(w, t, i)
+                    self._count_word_shape(w, t)
+                    self._count_char_ngrams(w, t)
+                    self._count_word_bigrams(w, t, pp, p, n)
+                    self._count_tagshape(p[1], word_shape(w), t)
+                    self._count_position_bucket(t, i, sentence_len)
+                    self._count_common_word_flag(w, t)
+                    self._count_verb_suffix(w, t)
+                    self._count_neighbor_affixes(w, t, pp, p, n)
+                    self._count_position_flags(pp, p, n, t)
+                    self._count_word_length(w, t)
 
-                    # ── f108–f113 ─────────────────────────────────────────────────
-                    # f108 has any digit
-                    if any(is_digit_char(ch) for ch in w):
-                        key = ("has_digit", t)
-                        self.feature_rep_dict["f108"][key] = self.feature_rep_dict["f108"].get(key, 0) + 1
-                    # f109 is all digits
-                    if is_numeric_word(w):
-                        key = ("is_numeric", t)
-                        self.feature_rep_dict["f109"][key] = self.feature_rep_dict["f109"].get(key, 0) + 1
-                    # f110 has any uppercase
-                    if any(ch.isupper() for ch in w):
-                        key = ("has_upper", t)
-                        self.feature_rep_dict["f110"][key] = self.feature_rep_dict["f110"].get(key, 0) + 1
-                    # # f111 initial capital
-                    # if w and w[0].isupper():
-                    #     key = ("init_cap", t)
-                    #     self.feature_rep_dict["f111"][key] = self.feature_rep_dict["f111"].get(key, 0) + 1
-                    # f112 all caps
-                    if w.isupper():
-                        key = ("all_caps", t)
-                        self.feature_rep_dict["f112"][key] = self.feature_rep_dict["f112"].get(key, 0) + 1
-                    # f113 number-noun
-                    head, sep, tail = w.partition("-")
-                    if head.isdigit() and sep == "-" and not tail.isdigit():
-                        key = ("num_noun", t)
-                        self.feature_rep_dict["f113"][key] = self.feature_rep_dict["f113"].get(key, 0) + 1
-
-                    # ── G2–G5 (f114–f117) ──────────────────────────────────────────
-                    # f114: capital-start
-                    if w and w[0].isupper() and w[0].isalpha():
-                        key = ("capital_start", t)
-                        self.feature_rep_dict["f114"][key] = self.feature_rep_dict["f114"].get(key, 0) + 1
-                    # f115: init-cap & first position
-                    if w and w[0].isupper() and i == 0:
-                        key = ("initcap_first", t)
-                        self.feature_rep_dict["f115"][key] = self.feature_rep_dict["f115"].get(key, 0) + 1
-                    # # f116: init-cap & not first
-                    # if w and w[0].isupper() and i != 0:
-                    #     key = ("initcap_notfirst", t)
-                    #     self.feature_rep_dict["f116"][key] = self.feature_rep_dict["f116"].get(key, 0) + 1
-                    # # f117: all-caps word
-                    # if w.isupper():
-                    #     key = ("all_caps_word", t)
-                    #     self.feature_rep_dict["f117"][key] = self.feature_rep_dict["f117"].get(key, 0) + 1
-
-                    # ——— f132: word‐shape + tag ———
-                    shape = word_shape(w)
-                    key = (shape, t)
-                    self.feature_rep_dict["f132"][key] = self.feature_rep_dict["f132"].get(key, 0) + 1
-
-                    # ——— f_char3 / f_char4: character n‐grams ———
-                    for n, feat_name in ((3, "f_char3"), (4, "f_char4")):
-                        for j in range(len(w) - n + 1):
-                            gram = w[j:j + n]
-                            key = (gram, t)
-                            self.feature_rep_dict[feat_name][key] = self.feature_rep_dict[feat_name].get(key, 0) + 1
-
-                    # ——— f_wordbigram_prev / f_wordbigram_next ———
-                    if i >= 1:
-                        prev_word = words_tags[i - 1][0]
-                        key = ((prev_word, w), t)
-                        self.feature_rep_dict["f_wordbigram_prev"][key] = \
-                            self.feature_rep_dict["f_wordbigram_prev"].get(key, 0) + 1
-                    if i < len(words_tags) - 1:
-                        next_word = words_tags[i + 1][0]
-                        key = ((w, next_word), t)
-                        self.feature_rep_dict["f_wordbigram_next"][key] = \
-                            self.feature_rep_dict["f_wordbigram_next"].get(key, 0) + 1
-
-                    # ——— f_tagshape: cross previous‐tag + current shape ———
-                    prev_tag = words_tags[i - 1][1] if i >= 1 else "*"
-                    bigram = (prev_tag, t)
-                    key = (bigram, shape)
-                    self.feature_rep_dict["f_tagshape"][key] = \
-                        self.feature_rep_dict["f_tagshape"].get(key, 0) + 1
-
-                    ### More Features - But Not Trained For The 95% ###
-
-                    # # ── f138: word‐shape ─────────────────────────────────────────
-                    # shape = word_shape(w)
-                    # key = (shape, t)
-                    # self.feature_rep_dict["f138"][key] = self.feature_rep_dict["f138"].get(key, 0) + 1
-
-                    # ── f141: sentence‐position bucket ─────────────────────────
-                    n = len(words_tags)
-                    pos = i / float(n - 1) if n > 1 else 0.0
-                    bucket = "start" if pos < 0.25 else ("end" if pos > 0.75 else "mid")
-                    self.feature_rep_dict["f141"][(bucket, t)] = \
-                        self.feature_rep_dict["f141"].get((bucket, t), 0) + 1
-
-                    # ── f142: common‐word flag ────────────────────────────────────
-                    # you’ll want to pick a threshold; e.g. any word count > 100
-                    if self.global_word_counts[w] > 100:
-                        key = ("common_word", t)
-                        self.feature_rep_dict["f142"][key] = \
-                            self.feature_rep_dict["f142"].get(key, 0) + 1
-
-                    # f143 - word length
-                    length = len(w)
-                    if length < 4:
-                        bucket = "short"
-                    elif length <= 7:
-                        bucket = "med"
-                    else:
-                        bucket = "long"
-                    self.feature_rep_dict["f143"][(bucket, t)] = \
-                        self.feature_rep_dict["f143"].get((bucket, t), 0) + 1
-
-                    # ── f300: common‐verb suffixes ────────────────────────────────────────────
-                    for suffix in ("ing", "ed", "en", "s", "es", "ies"):
-                        if w.lower().endswith(suffix):
-                            self.feature_rep_dict["f300"][(suffix, t)] = self.feature_rep_dict["f300"].get((suffix, t),
-                                                                                                           0) + 1
-                            break
-
-                    # ── f309–f311: sentence‐position flags ───────────────────────────────────
-                    is_second = (pp_word == "*") and (p_word != "*")
-                    self.feature_rep_dict["f309"][(is_second, t)] = self.feature_rep_dict["f309"].get((is_second, t), 0) + 1
-
-                    is_last = (n_word == "~")
-                    self.feature_rep_dict["f310"][(is_last, t)] = self.feature_rep_dict["f310"].get((is_last, t), 0) + 1
-
-                    is_middle = (p_word != "*") and (pp_word != "*") and (n_word != "~")
-                    self.feature_rep_dict["f311"][(is_middle, t)] = self.feature_rep_dict["f311"].get((is_middle, t), 0) + 1
-
-                    # ── f304–f307: prev/next word suffixes & prefixes ───────────────────────
-                    for L in range(1, min(4, len(p_word)) + 1):
-                        self.feature_rep_dict["f304"][(p_word[-L:], t)] = self.feature_rep_dict["f304"].get(
-                            (p_word[-L:], t), 0) + 1
-                        self.feature_rep_dict["f305"][(p_word[:L], t)] = self.feature_rep_dict["f305"].get((p_word[:L], t),
-                                                                                                           0) + 1
-                    for L in range(1, min(4, len(n_word)) + 1):
-                        self.feature_rep_dict["f306"][(n_word[-L:], t)] = self.feature_rep_dict["f306"].get(
-                            (n_word[-L:], t), 0) + 1
-                        self.feature_rep_dict["f307"][(n_word[:L], t)] = self.feature_rep_dict["f307"].get((n_word[:L], t),
-                                                                                                           0) + 1
-
-
-                # ── histories (same as before) ───────────────────────────────────
-                for prev2, prev1, curr, next1 in zip(padded, padded[1:], padded[2:], padded[3:]):
-                    w_m2, t_m2 = prev2
-                    w_m1, t_m1 = prev1
-                    w_i, t_i = curr
-                    w_p1, _ = next1
-                    history = (w_i, t_i, w_m1, t_m1, w_m2, t_m2, w_p1)
-                    self.histories.append(history)
-
-                for prev2, prev1, curr, next1 in zip(
-                        padded,  # [x0, x1, ... xn]
-                        padded[1:],  # [x1, x2, ... ,xn]
-                        padded[2:], # [x2, x3, ..., xn]
-                        padded[3:] # [x3, x4, ..., xn]
-                ):
-                    # unpack tuples
-                    w_m2, t_m2 = prev2
-                    w_m1, t_m1 = prev1
-                    w_i, t_i = curr
-                    w_p1, _ = next1
-
-                    # f‐style “history” tuple:
-                    history = (w_i, t_i,
-                               w_m1, t_m1,
-                               w_m2, t_m2,
-                               w_p1)
-
-                    self.histories.append(history)
-
-
-
+                # build histories for MEMM training
+                padded_full = PAD_LEFT + words_tags + PAD_RIGHT
+                for prev2, prev1, curr, nxt in zip(padded_full,
+                                                   padded_full[1:],
+                                                   padded_full[2:],
+                                                   padded_full[3:]):
+                    self.histories.append((
+                        curr[0], curr[1],
+                        prev1[0], prev1[1],
+                        prev2[0], prev2[1],
+                        nxt[0]
+                    ))
 
 
 class Feature2id:
@@ -430,155 +367,237 @@ class Feature2id:
             shape=(len(
                 self.feature_statistics.histories), self.n_total_features), dtype=bool)
 
-def represent_input_with_features(history: Tuple, dict_of_dicts: Dict[str, Dict[Tuple[str, str], int]])\
-        -> List[int]:
+
+# ——————————————————————————————————————————————————————
+# Helpers for represent_input_with_features
+# ——————————————————————————————————————————————————————
+def _fe_word_tag_basics(history: Tuple, dicts: Dict[str, Dict]):
     """
-        Extract feature vector in per a given history
-        @param history: tuple{c_word, c_tag, p_word, p_tag, pp_word, pp_tag, n_word}
-        @param dict_of_dicts: a dictionary of each feature and the index it was given
-        @return a list with all features that are relevant to the given history
+    f100–f107: word/tag, suffixes, prefixes, tag-trigram, tag-bigram,
+    tag-unigram, prev-word+tag, next-word+tag
     """
-    c_word = history[0]
-    c_tag = history[1]
     c_word, c_tag, p_word, p_tag, pp_word, pp_tag, n_word = history
-
-    features = []
-
+    feats: List[int] = []
     # f100
-    if (c_word, c_tag) in dict_of_dicts["f100"]:
-        features.append(dict_of_dicts["f100"][(c_word, c_tag)])
+    if (c_word, c_tag) in dicts["f100"]:
+        feats.append(dicts["f100"][(c_word, c_tag)])
+    # f101 suffixes
+    for L in range(1, min(4, len(c_word)) + 1):
+        suf = c_word[-L:]
+        idx = dicts["f101"].get((suf, c_tag))
+        if idx is not None: feats.append(idx)
+    # f102 prefixes
+    for L in range(1, min(4, len(c_word)) + 1):
+        pre = c_word[:L]
+        idx = dicts["f102"].get((pre, c_tag))
+        if idx is not None: feats.append(idx)
+    # f103 tag-trigram
+    if pp_word is not None and p_word is not None:
+        tri = (pp_tag, p_tag, c_tag)
+        idx = dicts["f103"].get(tri)
+        if idx is not None: feats.append(idx)
+    # f104 tag-bigram
+    if p_word is not None:
+        bi = (p_tag, c_tag)
+        idx = dicts["f104"].get(bi)
+        if idx is not None: feats.append(idx)
+    # f105 tag-unigram
+    idx = dicts["f105"].get(c_tag)
+    if idx is not None: feats.append(idx)
+    # f106 prev-word + tag
+    if p_word is not None:
+        idx = dicts["f106"].get((p_word, c_tag))
+        if idx is not None: feats.append(idx)
+    # f107 next-word + tag
+    if n_word is not None:
+        idx = dicts["f107"].get((n_word, c_tag))
+        if idx is not None: feats.append(idx)
+    return feats
 
 
-    # f114: capital‐start
-    if ("capital_start", c_tag) in dict_of_dicts["f114"]:
-        features.append(dict_of_dicts["f114"][("capital_start", c_tag)])
+def _fe_orthographic(history: Tuple, dicts: Dict[str, Dict]):
+    """
+    f108–f113: has_digit, is_numeric, has_upper, all_caps, num_noun
+    """
+    c_word, c_tag, *_ = history
+    feats: List[int] = []
+    # f108
+    if any(ch.isdigit() for ch in c_word):
+        idx = dicts["f108"].get(("has_digit", c_tag))
+        if idx is not None: feats.append(idx)
+    # f109
+    if c_word.isdigit():
+        idx = dicts["f109"].get(("is_numeric", c_tag))
+        if idx is not None: feats.append(idx)
+    # f110
+    if any(ch.isupper() for ch in c_word):
+        idx = dicts["f110"].get(("has_upper", c_tag))
+        if idx is not None: feats.append(idx)
+    # f112
+    if c_word.isupper():
+        idx = dicts["f112"].get(("all_caps", c_tag))
+        if idx is not None: feats.append(idx)
+    # f113
+    head, sep, tail = c_word.partition("-")
+    if head.isdigit() and sep == "-" and not tail.isdigit():
+        idx = dicts["f113"].get(("num_noun", c_tag))
+        if idx is not None: feats.append(idx)
+    return feats
 
-    # f115: initcap_first
-    if ("initcap_first", c_tag) in dict_of_dicts["f115"]:
-        features.append(dict_of_dicts["f115"][("initcap_first", c_tag)])
 
-    # f116: initcap_notfirst
-    if ("initcap_notfirst", c_tag) in dict_of_dicts["f116"]:
-        features.append(dict_of_dicts["f116"][("initcap_notfirst", c_tag)])
+def _fe_capitalization(history: Tuple, dicts: Dict[str, Dict], position: int):
+    """
+    f114: capital_start; f115: initcap_first
+    """
+    c_word, c_tag, *_ = history
+    feats: List[int] = []
+    if c_word and c_word[0].isupper() and c_word[0].isalpha():
+        idx = dicts["f114"].get(("capital_start", c_tag))
+        if idx is not None: feats.append(idx)
+        if position == 0:
+            idx2 = dicts["f115"].get(("initcap_first", c_tag))
+            if idx2 is not None: feats.append(idx2)
+    return feats
 
-    # f117: all_caps_word
-    if ("all_caps_word", c_tag) in dict_of_dicts["f117"]:
-        features.append(dict_of_dicts["f117"][("all_caps_word", c_tag)])
 
-    # ——— f132: word‐shape
-    shape = word_shape(c_word)
-    idx = dict_of_dicts["f132"].get((shape, c_tag))
-    if idx is not None:
-        features.append(idx)
+def _fe_word_shape(history: Tuple, dicts: Dict[str, Dict]):
+    """f132: word_shape"""
+    c_word, c_tag, *_ = history
+    feats: List[int] = []
+    shp = word_shape(c_word)
+    idx = dicts["f132"].get((shp, c_tag))
+    if idx is not None: feats.append(idx)
+    return feats
 
-    # ——— f_char3 / f_char4
-    for n, feat_name in ((3, "f_char3"), (4, "f_char4")):
+
+def _fe_char_ngrams(history: Tuple, dicts: Dict[str, Dict]):
+    """f_char3, f_char4: character n-grams"""
+    c_word, c_tag, *_ = history
+    feats: List[int] = []
+    for n, key in ((3, 'f_char3'), (4, 'f_char4')):
         for j in range(len(c_word) - n + 1):
-            gram = c_word[j:j + n]
-            idx = dict_of_dicts[feat_name].get((gram, c_tag))
-            if idx is not None:
-                features.append(idx)
-
-    # ——— word‐bigrams
-    if p_word != "*":
-        idx = dict_of_dicts["f_wordbigram_prev"].get(((p_word, c_word), c_tag))
-        if idx is not None: features.append(idx)
-    if n_word != "~":
-        idx = dict_of_dicts["f_wordbigram_next"].get(((c_word, n_word), c_tag))
-        if idx is not None: features.append(idx)
+            gram = c_word[j:j+n]
+            idx = dicts[key].get((gram, c_tag))
+            if idx is not None: feats.append(idx)
+    return feats
 
 
+def _fe_word_bigrams(history: Tuple, dicts: Dict[str, Dict]):
+    """f_wordbigram_prev, f_wordbigram_next"""
+    c_word, c_tag, p_word, _p_tag, pp_word, _pp_tag, n_word = history
+    feats: List[int] = []
+    if p_word is not None:
+        idx = dicts['f_wordbigram_prev'].get(((p_word, c_word), c_tag))
+        if idx is not None: feats.append(idx)
+    if n_word is not None:
+        idx = dicts['f_wordbigram_next'].get(((c_word, n_word), c_tag))
+        if idx is not None: feats.append(idx)
+    return feats
 
-    # ——— tag×shape
-    idx = dict_of_dicts["f_tagshape"].get(((p_tag, c_tag), shape))
-    if idx is not None:
-        features.append(idx)
 
-    ### More Features That Hasn't Been Used For Training 95% ###
+def _fe_tagshape(history: Tuple, dicts: Dict[str, Dict]):
+    """f_tagshape: ((prev_tag, curr_tag), shape)"""
+    c_word, c_tag, p_word, p_tag, *_ = history
+    feats: List[int] = []
+    shp = word_shape(c_word)
+    idx = dicts['f_tagshape'].get(((p_tag, c_tag), shp))
+    if idx is not None: feats.append(idx)
+    return feats
 
-    # f138: word‐shape
-    shape = word_shape(c_word)
-    idx = dict_of_dicts["f138"].get((shape, c_tag))
-    if idx is not None:
-        features.append(idx)
 
-    # f141: sentence‐position bucket
-    # (we need sentence length & position: easiest is to include `bucket` in the history tuple,
-    #  but if you can’t, you can approximate using the two PAD tags:
-    is_first = (pp_tag == "*" and p_tag == "*")
-    is_last = (n_word == "~")
-    if is_first:
-        bucket = "start"
-    elif is_last:
-        bucket = "end"
-    else:
-        bucket = "mid"
-    idx = dict_of_dicts["f141"].get((bucket, c_tag))
-    if idx is not None:
-        features.append(idx)
+def _fe_position_bucket(history: Tuple, dicts: Dict[str, Dict], position: int, sentence_len: int):
+    """f141: sentence-position bucket"""
+    c_word, c_tag, *_ = history
+    feats: List[int] = []
+    frac = position / float(sentence_len - 1) if sentence_len > 1 else 0.0
+    bucket = 'start' if frac < 0.25 else ('end' if frac > 0.75 else 'mid')
+    idx = dicts['f141'].get((bucket, c_tag))
+    if idx is not None: feats.append(idx)
+    return feats
 
-    # f142: common‐word flag
-    # you’ll need access to the same `global_word_counts` threshold; simplest is to pass
-    # a set `common_words` into your tagger or store it on feature2id.
-    # If you have `common_words`, then:
+
+def _fe_common_word_flag(history: Tuple, dicts: Dict[str, Dict], common_words: set):
+    """f142: common-word flag"""
+    c_word, c_tag, *_ = history
+    feats: List[int] = []
     if c_word in common_words:
-        idx = dict_of_dicts["f142"].get(("common_word", c_tag))
-        if idx is not None:
-            features.append(idx)
+        idx = dicts['f142'].get(("common_word", c_tag))
+        if idx is not None: feats.append(idx)
+    return feats
 
 
-    # f143
-    length = len(c_word)
-    if length < 4:
-        bucket = "short"
-    elif length <= 7:
-        bucket = "med"
-    else:
-        bucket = "long"
-    idx = dict_of_dicts["f143"].get((bucket, c_tag))
-    if idx is not None: features.append(idx)
+def _fe_verb_suffix(history: Tuple, dicts: Dict[str, Dict]):
+    """f300: common-verb suffix"""
+    c_word, c_tag, *_ = history
+    feats: List[int] = []
+    for suf in ("ing","ed","en","s","es","ies"):
+        if c_word.lower().endswith(suf):
+            idx = dicts['f300'].get((suf, c_tag))
+            if idx is not None: feats.append(idx)
+            break
+    return feats
 
-    # f304–f307
-    for fc, neigh in [("f304", pp_word), ("f305", pp_word[:1]), ("f306", n_word[-1:]), ("f307", n_word[:1])]:
-        idx = dict_of_dicts[fc].get((neigh, c_tag))
-        if idx is not None: features.append(idx)
 
-    # f309–311
-    for fc, cond in [
-        ("f309", (pp_word == "*" and p_word != "*")),
-        ("f310", (n_word == "~")),
-        ("f311", (p_word != "*" and pp_word != "*" and n_word != "~"))
-    ]:
-        idx = dict_of_dicts[fc].get((cond, c_tag))
-        if idx is not None: features.append(idx)
+def _fe_neighbor_affixes(history: Tuple, dicts: Dict[str, Dict]):
+    """f304–f307: affixes of neighboring words"""
+    c_word, c_tag, p_word, _p_tag, pp_word, _pp_tag, n_word = history
+    feats: List[int] = []
+    for key, neigh in [('f304', pp_word), ('f305', pp_word[:1]),
+                       ('f306', n_word[-1:]), ('f307', n_word[:1])]:
+        if neigh is not None:
+            idx = dicts[key].get((neigh, c_tag))
+            if idx is not None: feats.append(idx)
+    return feats
 
-    # # --- f118 — is_number
-    # idx = dict_of_dicts["f118"].get(("is_number", c_tag))
-    # if idx is not None:
-    #     features.append(idx)
 
-    # # --- f119, f120, f121 — unknown-word features
-    # unk_keys = [
-    #     (c_word, c_tag),
-    #     (p_tag, c_tag),
-    #     (pp_tag, p_tag, c_tag)
-    # ]
-    # for i, key in enumerate(unk_keys, start=119):
-    #     idx = dict_of_dicts[f"f{i}"].get(key)
-    #     if idx is not None:
-    #         features.append(idx)
-    #
-    # # replace your whole G8 lookup with this
-    # for offset, label in enumerate(
-    #         ["g8_1", "g8_2", "g8_3", "g8_4", "g8_5",
-    #          "g8_6", "g8_7", "g8_8", "g8_9", "g8_10"],
-    #         start=122
-    # ):
-    #     feat_class = f"f{offset}"  # 122..131
-    #     idx = dict_of_dicts[feat_class].get((label, c_tag))
-    #     if idx is not None:
-    #         features.append(idx)
+def _fe_position_flags(history: Tuple, dicts: Dict[str, Dict]):
+    """f309–f311: boolean position flags"""
+    c_word, c_tag, p_word, p_tag, pp_word, pp_tag, n_word = history
+    feats: List[int] = []
+    # second?
+    cond2 = (pp_word is None and p_word is not None)
+    idx = dicts['f309'].get((cond2, c_tag))
+    if idx is not None: feats.append(idx)
+    # last?
+    cond_last = (n_word is None)
+    idx = dicts['f310'].get((cond_last, c_tag))
+    if idx is not None: feats.append(idx)
+    # middle?
+    cond_mid = (p_word is not None and pp_word is not None and n_word is not None)
+    idx = dicts['f311'].get((cond_mid, c_tag))
+    if idx is not None: feats.append(idx)
+    return feats
 
+
+def _fe_word_length(history: Tuple, dicts: Dict[str, Dict]):
+    """f143: word-length bucket"""
+    c_word, c_tag, *_ = history
+    feats: List[int] = []
+    l = len(c_word)
+    bucket = 'short' if l<4 else ('med' if l<=7 else 'long')
+    idx = dicts['f143'].get((bucket, c_tag))
+    if idx is not None: feats.append(idx)
+    return feats
+
+# main dispatcher:
+def represent_input_with_features(history: Tuple, dicts: Dict[str, Dict], common_words: set, position: int=None, sentence_len: int=None) -> List[int]:
+    features: List[int] = []
+    features += _fe_word_tag_basics(history, dicts)
+    features += _fe_orthographic(history, dicts)
+    # position and sentence_len must be passed in by caller for below:
+    if position is not None:
+        features += _fe_capitalization(history, dicts, position)
+    features += _fe_word_shape(history, dicts)
+    features += _fe_char_ngrams(history, dicts)
+    features += _fe_word_bigrams(history, dicts)
+    features += _fe_tagshape(history, dicts)
+    if position is not None and sentence_len is not None:
+        features += _fe_position_bucket(history, dicts, position, sentence_len)
+        features += _fe_common_word_flag(history, dicts, common_words)
+    features += _fe_verb_suffix(history, dicts)
+    features += _fe_neighbor_affixes(history, dicts)
+    features += _fe_position_flags(history, dicts)
+    features += _fe_word_length(history, dicts)
     return features
 
 

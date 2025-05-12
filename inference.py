@@ -1,3 +1,5 @@
+import numpy as np
+
 from preprocessing import read_test, represent_input_with_features
 from tqdm import tqdm
 import math
@@ -45,9 +47,8 @@ def memm_viterbi(sentence: list,
                     next_word
                 )
                 feats = represent_input_with_features(
-                    hist_tp,
-                    feature2id.feature_to_idx,
-                    feature2id.feature_statistics.common_words
+                        hist_tp,
+                        feature2id.feature_to_idx
                 )
 
                 score_tp = sum(pre_trained_weights[idx] for idx in feats)
@@ -66,23 +67,29 @@ def memm_viterbi(sentence: list,
 
     return beam[0][1]
 
-def tag_all_test(test_path, pre_trained_weights, feature2id, predictions_path):
-    tagged = "test" in test_path
-    test = read_test(test_path, tagged=tagged)
+def tag_all_test(test_path: str,
+                 pre_trained_weights,
+                 feature2id,
+                 predictions_path: str,
+                 tagged: bool = True):
+    """
+    Runs Viterbi on every sentence in `test_path` and writes
+    word_tag predictions to `predictions_path`, one sentence per line.
+    """
+    # 1) read your data
+    test_sentences = read_test(test_path, tagged=tagged)
 
-    output_file = open(predictions_path, "a+")
+    # 2) open output in write mode
+    with open(predictions_path, "w", encoding="utf8") as out:
+        for words, _ in tqdm(test_sentences, total=len(test_sentences)):
+            # run Viterbi: returns ['*','*', tag1, tag2, …, tagN, '~']
+            hist = memm_viterbi(words, pre_trained_weights, feature2id)
 
-    for sen in tqdm(test, total=len(test)):
-        words = sen[0]
-        # run Viterbi: hist = ['*','*', tag1, tag2, …, tagN, '~']
-        hist = memm_viterbi(words, pre_trained_weights, feature2id)
+            # drop padding
+            real_words = words[2:-1]
+            pred_tags  = hist[2:-1]
 
-        # real words are at positions 2 .. len(words)-2
-        real_words = words[2:-1]
-        pred_tags = hist[2:-1]
-
-        # write word_tag for each real word
-        for w, t in zip(real_words, pred_tags):
-            output_file.write(f"{w}_{t} ")
-        output_file.write("\n")
-    output_file.close()
+            # write word_tag pairs
+            for w, t in zip(real_words, pred_tags):
+                out.write(f"{w}_{t} ")
+            out.write("\n")

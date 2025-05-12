@@ -35,29 +35,6 @@ def calc_objective_per_iter(w_i, *args):
     return (-1) * likelihood, (-1) * grad
 
 
-# def get_optimal_vector(statistics: FeatureStatistics, feature2id: Feature2id, lam: float, weights_path: str) -> None:
-#     """
-#     The function computes and saves to a file the optimal weights
-#     @param statistics: The Feature Statistics object containing the histories and their tags
-#     @param feature2id: The Feature2ID object
-#     @param lam: the regularizer lambda to use for the L2 loss in the optimization
-#     @param weights_path: the path in which to save the optimal weights
-#
-#     """
-#     args = (statistics.histories, represent_input_with_features, feature2id, lam)
-#     w_0 = np.random.normal(0, 1, feature2id.n_total_features)
-#
-#     optimal_params = fmin_l_bfgs_b(func=calc_objective_per_iter,
-#                                    x0=w_0,
-#                                    args=args,
-#                                    maxiter=750,
-#                                    iprint=10,
-#                                    epsilon=1e-7,
-#                                    bounds=None)
-#     with open(weights_path, 'wb+') as f:
-#         pickle.dump((optimal_params, feature2id), f)
-
-
 def get_optimal_vector(statistics: FeatureStatistics,
                        feature2id: Feature2id,
                        lam: float,
